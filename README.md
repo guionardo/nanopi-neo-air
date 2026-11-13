@@ -11,21 +11,23 @@ processo possa ser repetido ou auditado depois.
 
 | Item | Situação |
 | --- | --- |
-| Hardware | Em mãos, eMMC virgem |
+| Hardware | Em mãos; **eMMC já contém um sistema não confiável** (loop de reset) |
 | SO alvo | FriendlyCore (Ubuntu Core) — kernel 4.14, armhf |
+| Console serial | Adaptador PL2303 em `/dev/ttyUSB0`, funcional |
 | Papel do controlador | **A definir** (ver [docs/11-decisoes.md](docs/11-decisoes.md)) |
-| Documentação | Em construção |
+| Documentação | Em construção — ver [log de bordo](docs/12-log-de-bordo.md) |
 
 ## Por onde começar
 
 Se é a primeira vez com a placa, leia na ordem:
 
-1. [Hardware e pinagem](docs/00-hardware.md) — o que a placa tem (e o que não tem)
-2. [Lista de materiais](docs/01-materiais.md) — o que precisa estar na mesa
-3. [Download e verificação da imagem](docs/02-preparo-imagem.md)
-4. [Gravação do cartão microSD](docs/03-gravacao-sd.md)
-5. [Primeiro boot e acesso](docs/04-primeiro-boot.md)
-6. [Gravar o SO no eMMC](docs/05-gravacao-emmc.md)
+1. [Log de bordo](docs/12-log-de-bordo.md) — o que já foi observado nesta placa (comece aqui)
+2. [Hardware e pinagem](docs/00-hardware.md) — o que a placa tem (e o que não tem)
+3. [Lista de materiais](docs/01-materiais.md) — o que precisa estar na mesa
+4. [Download e verificação da imagem](docs/02-preparo-imagem.md)
+5. [Gravação do cartão microSD](docs/03-gravacao-sd.md)
+6. [Primeiro boot e acesso](docs/04-primeiro-boot.md)
+7. [Gravar o SO no eMMC](docs/05-gravacao-emmc.md)
 
 Depois disso: [configuração base](docs/06-configuracao-base.md),
 [rede](docs/07-rede.md), [GPIO](docs/08-gpio.md).

@@ -17,9 +17,18 @@ Ordem sugerida de leitura = ordem numérica.
 | 09 | [Operação e manutenção](09-manutencao.md) | Temperatura/frequência, logs, backup do eMMC, atualização | ✅ |
 | 10 | [Troubleshooting](10-troubleshooting.md) | Falhas de boot, rede, eMMC, energia | ✅ |
 | 11 | [Decisões e pendências](11-decisoes.md) | ADRs curtos e o que falta definir | 📝 vivo |
+| 12 | [Log de bordo](12-log-de-bordo.md) | O que foi realmente observado na bancada, com evidências | 📝 vivo |
 | 99 | [Referências](99-referencias.md) | Links oficiais e comunidade | ✅ |
 
 ## Checklists de progresso
+
+### Fase 0 — Diagnóstico da placa recebida
+
+- [x] Adaptador USB-TTL 3.3 V conectado (`/dev/ttyUSB0`, PL2303)
+- [x] Console serial lendo a 115200 8N1
+- [x] Inventário da eMMC e do ambiente U-Boot (ver [log de bordo](12-log-de-bordo.md))
+- [ ] **Confirmar fonte 5 V/2 A** (suspeita principal do loop de reset)
+- [ ] Estabilizar o boot (fonte adequada ou reflash da eMMC)
 
 ### Fase 1 — Placa operacional (boot por SD)
 

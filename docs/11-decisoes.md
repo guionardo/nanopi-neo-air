@@ -86,16 +86,39 @@ Preencher na primeira vez que a placa bootar.
 
 | Campo | Valor |
 | --- | --- |
-| Versão do hardware | V1.0 / V1.1 → |
-| MAC Wi-Fi (`wlan0`) | |
+| Versão do hardware | a confirmar (LEDs: ver [00](00-hardware.md)) |
+| MAC Wi-Fi (`wlan0`) | a obter quando o boot estabilizar |
 | IP em produção | |
 | Hostname | `ctl-nanopi` (sugerido) |
-| Imagem gravada (nome do arquivo) | |
-| Data da instalação | |
+| Imagem gravada (nome do arquivo) | desconhecida — eMMC veio com sistema de origem não identificada |
+| Data da instalação | anterior a 2026-11-13 |
 | SHA-256 da imagem | |
-| Kernel instalado (`uname -r`) | |
+| Kernel instalado | 4.14.111 (armhf) |
+| U-Boot | 2017.11 (15/06/2021), board `nanopi-neo-air`, `cpu=h3` |
+| Userland na eMMC | Ubuntu 24.04 (systemd 255.4-1ubuntu8.2) |
 | Local físico / responsável | |
 | Nº de série da etiqueta | |
+
+### D-005 — Estado real da placa difere do pressuposto inicial
+
+**Data:** 2026-11-13
+**Status:** aceita (corrige o planejamento)
+
+**Contexto:** o setup partiu de "eMMC virgem, boot apenas por SD". Ao conectar o
+console serial, observou-se que a placa **já inicia pela eMMC**, com ambiente
+U-Boot corrompido (`bad CRC, using default environment`) e **loop de reset a
+cada ~4,5 s** durante o coldplug do udev no initramfs.
+
+**Decisão:** tratar a eMMC como **conteúdo não confiável** e não depender dela.
+Antes de qualquer serviço, estabilizar o boot — primeiro testando fonte 5 V/2 A;
+persistindo, refazer o eflasher com imagem oficial.
+
+**Consequências:**
+
+- a etapa 05 (gravação do eMMC) passa a ser **recuperação**, não instalação limpa;
+- o cartão SD deixa de ser opcional: é o caminho de reinstalação;
+- evidências e comandos ficam em [12-log-de-bordo.md](12-log-de-bordo.md);
+- nenhuma credencial do sistema atual é conhecida — não há como assumir `pi`/`pi`.
 
 ## Pendências
 

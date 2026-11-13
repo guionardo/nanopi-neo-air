@@ -71,6 +71,35 @@ mais simples: regravar o cartão — a expansão é feita no primeiro boot.
 Clássico de **subtensão**. Troque a fonte antes de suspeitar do software. Também
 pode ser contato do slot microSD — limpe com álcool isopropílico.
 
+## Reset a cada ~4,5 s durante o boot (sem mensagem de erro)
+
+Sintoma: o log chega ao initramfs, mostra `Starting systemd-udevd` e a placa
+reinicia; não há `Kernel panic` nem `Oops`.
+
+Procedimento de isolamento (detalhado em [12-log-de-bordo.md](12-log-de-bordo.md)):
+
+1. **Confirme a fonte.** 5 V / 2 A dedicada, cabo curto. Este é o suspeito nº 1:
+   o reset coincide com o momento em que eMMC e Wi-Fi começam a consumir.
+2. **Interrompa o autoboot** (segure tecla nos 2 s) e observe `bad CRC, using
+   default environment`. Ambiente corrompido = escrita anterior incompleta.
+3. **Teste sem initrd** para ver se a placa fica estável:
+
+   ```text
+   fatload mmc 0 0x46000000 zImage
+   fatload mmc 0 0x48000000 sun8i-h3-nanopi-neo-air.dtb
+   setenv bootargs console=ttyS0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rw rootwait
+   bootz 0x46000000 - 0x48000000
+   ```
+
+   Estável em `Waiting for root device` = o reset depende do coldplug (energia
+   ou driver), não do rootfs em si. Reiniciando igual = problema de hardware/base.
+4. **Persistindo com fonte boa:** considere a eMMC com imagem inválida. Refaça o
+   eflasher ([05](05-gravacao-emmc.md)) a partir de um cartão SD.
+
+> Uma imagem gravada de forma incompleta pode deixar a placa em loop e ainda
+> permitir leitura pelo U-Boot — o que engana quem conclui "a eMMC está boa
+> porque o U-Boot lê os arquivos".
+
 ## eMMC
 
 ### eMMC não inicia (placa "morta" sem cartão)
