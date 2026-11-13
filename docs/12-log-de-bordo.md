@@ -511,3 +511,61 @@ e2fsck -fn /dev/mmcblk3p2
 > A numeração muda conforme o *boot device* do U-Boot: com o cartão no slot, o
 > SD é `mmcblk1` e a eMMC é `mmcblk3`. O `boot.cmd` do eflasher ajusta isso no
 > device tree com `fdt set mmc<X> boot_device <1>`.
+
+
+---
+
+## Sessão 6 — 2026-11-13 · adaptador serial perdido, auto-flash headless
+
+### Achado 18 — o PL2303 saiu do barramento USB
+
+Durante a gravação do `rootfs.img` o adaptador desapareceu do host: `lsusb` sem
+`067b`, nenhum `/dev/ttyUSB*`, mesmo depois de reconectar em **outra porta**.
+
+```text
+Bus 001 Device 003: ID 03f0:231d HP, Inc Broadcom 2070 Bluetooth Combo
+Bus 001 Device 004: ID 138a:0007 Validity Sensors, Inc. VFS451
+Bus 001 Device 005: ID 04f2:b163 Chicony Electronics Co., Ltd HP Webcam
+(sem 067b:2303)
+```
+
+Não é rename de device: o chip não é enumerado. Hipótese principal: proteção de
+overcurrent na porta USB (histórico de VDD_5V ligado junto com o carregador,
+ver sessão 2) ou adaptador morto. Sem root no host não há como resetar o hub.
+
+### Estado da eMMC ao final da sessão 6
+
+| Item | Estado |
+| --- | --- |
+| U-Boot (0x2000) | ✅ gravado, idêntico ao payload |
+| p1 (boot FAT) | ✅ gravado |
+| p2 (rootfs) | ⚠️ recebeu `dd` cru do sparse — inválida |
+| p3 (userdata) | ⚠️ recebeu `dd` cru do sparse — inválida |
+
+Conclusão: **a eMMC não inicia** neste estado, e sem serial não dá para
+consertar pelo console. Caminho escolhido: refazer pelo cartão, com gravação
+automática e sem GUI.
+
+### Achado 19 — decodificar sparse no próprio cartão resolve o problema
+
+O cartão do eflasher tem Debian 12 core com `bash`, `od`, `dd` e `e2fsck`, mas
+sem `simg2img` e sem `python3`. O decodificador em bash
+([`scripts/unsparse.sh`](../scripts/unsparse.sh)) funciona nativamente ali.
+
+O número de chunks **não precisa ser digitado**: está no cabeçalho sparse, em
+`total_chunks` (offset 20) — e `total_blks` (offset 16) permite conferir o
+tamanho. Atenção: o offset 12 é `blk_sz`, não `total_blks` (erro corrigido no
+teste).
+
+### Entrega
+
+- [`scripts/flash-emmc-headless.sh`](../scripts/flash-emmc-headless.sh) — roda no
+  cartão: detecta SD (boot) e eMMC (destino) por tamanho, grava U-Boot + p1,
+  expande as duas sparse, roda `e2fsck -fn`, loga em `/root/flash-emmc.log` e
+  desliga.
+- [`scripts/install-headless-flash.sh`](../scripts/install-headless-flash.sh) —
+  roda no PC com `sudo`: instala tudo na p3 do cartão, habilita o serviço,
+  desabilita a GUI e arma a execução única.
+- Documentado em [05](05-gravacao-emmc.md#alternativa-sem-display-e-sem-serial--auto-flash-headless).
+
+Nada foi executado ainda: exige o cartão no PC e uma senha de `sudo`.

@@ -157,3 +157,51 @@ Se preferir manter o SO no cartão (eMMC intacta como reserva):
 - tenha sempre uma imagem gravada de reserva.
 
 Para um controlador que fica ligado 24/7, a eMMC é a escolha mais robusta.
+
+## Alternativa sem display e sem serial — auto-flash headless
+
+O eflasher oficial é uma **GUI Qt** (`/opt/eflasher-gui`). O NEO Air não tem
+HDMI, então a GUI nunca abre e **a eMMC não é gravada** — o cartão inicia e fica
+parado. Se você também não tem console serial, use o auto-flash: um serviço
+systemd instalado no próprio cartão faz a gravação sem interface nenhuma.
+
+O payload do cartão (`/mnt/debian-bookworm-core/`) já está pronto para isso:
+
+| Arquivo | Formato | Destino |
+| --- | --- | --- |
+| `u-boot-sunxi-with-spl.bin` | binário | offset `0x2000` (área de usuário) |
+| `boot.img` | FAT cru | offset 24 MiB (p1) |
+| `rootfs.img` | **Android sparse** | offset 64 MiB (p2) |
+| `userdata.img` | **Android sparse** | offset 1472 MiB (p3) |
+
+> `rootfs.img` e `userdata.img` **não** são ext4 crus: começam com o magic
+> `0xED26FF3A` (Android sparse). `dd` direto produz uma partição sem superbloco
+> (`Bad magic number in super-block`) — é preciso expandir antes. O
+> [`scripts/unsparse.sh`](../scripts/unsparse.sh) faz isso em bash puro.
+
+### Passo 1 — instalar o auto-flash no cartão (no PC, com sudo)
+
+```bash
+sudo ./scripts/install-headless-flash.sh /dev/sdX   # disco inteiro, não partição
+```
+
+O script monta a p3 do cartão, instala `/opt/headless/{flash-emmc.sh,unsparse.sh}`,
+cria e habilita `flash-emmc.service`, desabilita a GUI e arma uma execução única
+(`/opt/headless/ARMED`). **O payload não é alterado.**
+
+### Passo 2 — deixar a placa gravar
+
+1. Cartão no NanoPi, ligar.
+2. A placa grava a eMMC (~5–10 min). O console mostra erros de I/O do cartão
+   (`mmc1: data error`) — o driver exFAT do kernel 4.14 é instável em leitura
+   longa, mas o `dd` conclui.
+3. Ao terminar, roda `e2fsck -fn` na p2, grava o resultado em
+   `/root/flash-emmc.log` e **desliga sozinha**.
+
+### Passo 3 — subir da eMMC
+
+Remover o cartão e ligar. Se não subir, o log em `/root/flash-emmc.log` do
+cartão diz onde parou (`FLASH_DONE` ou `FLASH_FAILED`).
+
+O serviço é idempotente por design: apaga a flag `ARMED` antes de gravar, então
+nunca roda duas vezes seguidas.
