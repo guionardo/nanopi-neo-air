@@ -279,3 +279,124 @@ power-cycle é obrigatório.
 esperando o próximo boot, interrompe o autoboot e inicia o kernel com cmdline
 própria (por padrão `init=/bin/sh`), liberando o console para recuperação.
 
+---
+
+## Sessão 4 — 2026-11-13 · causa do loop de getty: corrupção no ext4
+
+### Como o shell de diagnóstico foi obtido
+
+O override iniciou o kernel com `init=/bin/sh`. O initramfs ignora esse argumento
+para o *init real*, mas o efeito prático foi outro: o initramfs não conseguiu
+montar o rootfs e caiu no shell `(initramfs)`, que já é root. Foi o suficiente.
+
+Estado encontrado: `rootfs` em RAM, eMMC enumerada como **`/dev/mmcblk3`**.
+
+```text
+/dev/mmcblk3     8GB 8GTF4R (MMC)
+/dev/mmcblk3p1   40 MiB  FAT   (boot)
+/dev/mmcblk3p2   1,4 GiB ext4  (Debian 12.4, label rootfs)
+/dev/mmcblk3p3   6,1 GiB       (filesystem não reconhecido)
+```
+
+### Achado 10 — a eMMC é saudável; a corrupção é lógica
+
+Leitura sequencial de 25 MB em p2 e em p3: `400+0 records in / 400+0 records out`,
+**sem erro de I/O**. O chip responde bem; o problema é o sistema de arquivos.
+
+### Achado 11 — p2 corrompida (causa do loop de getty)
+
+Montada em `/mnt`, a p2 respondeu com erros do ext4:
+
+```text
+EXT4-fs error (device mmcblk3p2): ext4_find_entry:1449: inode #19135:
+  comm ls: checksumming directory block 0
+ls: /mnt/sbin/agetty: Bad message
+ls: /mnt/usr/sbin/agetty: Bad message
+```
+
+`e2fsck -fn` (somente leitura) mostrou o tamanho do estrago:
+
+```text
+Inode 33022 is a zero-length directory.
+Inode 43187 has an invalid extent node (blk 264076, lblk 0)
+Directory inode 16783, block #0, offset 0: directory corrupted
+e2fsck: aborted
+rootfs: ********** WARNING: Filesystem still has errors **********
+```
+
+O diretório `/usr/sbin` está ilegível — e é onde vive o `agetty`. O getty morre ao
+ser executado, o systemd o reinicia, e o console é inundado com o banner
+(`/etc/issue`). Isso fecha a causa do **loop de getty** da sessão 3.
+
+Origem provável da corrupção: os **brownouts repetidos** da sessão 2 (duas fontes).
+Cada reset em loop acontecia com o ext4 montado `rw`; dezenas de desligamentos
+sujos em poucos minutos produzem exatamente esse padrão (inodes com extent tree
+inválida, diretórios com checksum quebrado).
+
+### Achado 12 — p2 é Debian 12.4, e isso é coerente com o eflasher
+
+```text
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+VERSION="12.4"
+/etc/hostname -> FriendlyElec
+/etc/fstab    -> # UNCONFIGURED FSTAB FOR BASE SYSTEM
+/bin/login    -> presente;  /usr/sbin/agetty -> ilegível
+```
+
+A "mistura Ubuntu 24.04 / Debian 12" registrada na sessão 1 **não é** gravação
+incompleta: o eflasher usa um initramfs Ubuntu 24.04 para instalar um payload
+Debian 12. É o comportamento normal dessa imagem.
+
+### Achado 13 — p3 não é montável (filesystem desconhecido no initramfs)
+
+```text
+mount -t ext4 /dev/mmcblk3p3 /mnt2  -> Invalid argument
+mount -t auto /dev/mmcblk3p3 /mnt2  -> Invalid argument
+```
+
+`/proc/filesystems` do initramfs lista apenas ext2/3/4, vfat, overlay, nfs. A p3
+provavelmente é **f2fs/btrfs/xfs** (ou está vazia). Só é possível confirmar com um
+`blkid`/`file -s` de um sistema completo. Fica pendente.
+
+### Achado 14 — o cartão SD já é um cartão eflasher pronto
+
+O cartão do usuário (`/dev/sdc`, 58,6 GB) não estava vazio:
+
+```text
+sdc1  6,4 GiB  exFAT  "FriendlyARM"  -> eflasher.conf + debian-bookworm-core/ (1,2 GB)
+sdc2  40 MiB   vfat   "BOOT"         -> zImage, rootfs.cpio.gz, dtbs, uEnv.txt, boot.scr
+sdc3  850 MiB  ext4   "rootfs"
+```
+
+`eflasher.conf`:
+
+```ini
+[General]
+autoStart=debian-bookworm-core
+autoExit=false
+disableLowFormatting=false
+```
+
+Ou seja: **basta dar boot pelo cartão e o eflasher regrava a eMMC sozinho**, sem
+display (o NEO Air não tem HDMI). Não é preciso baixar nem gravar imagem nova.
+
+Observação de bancada: o cartão não aparecia no `lsblk` porque o leitor **não havia
+sido conectado** — o `lsusb` mostrava apenas o PL2303. Depois de conectado,
+apareceu como `/dev/sdc`.
+
+### Reparo tentado e por que foi descartado
+
+`e2fsck -fy` foi executado duas vezes. Resultado:
+
+```text
+Pass 5: Checking group summary information
+rootfs: 45320/90112 files (0.1% non-contiguous), 294583/360448 blocks
+```
+
+A segunda passagem saiu **limpa** — o filesystem agora é consistente. Porém o
+reparo **removeu inodes** (`Inode bitmap differences: -16831 -29003 -30448 -33022
+-43282`), o que pode ter apagado justamente arquivos de `/usr/sbin`. Além disso a
+p3 segue inutilizável. Um sistema assim não é confiável para produção.
+
+**Decisão:** descartar o reparo e regravar a eMMC pelo eflasher do cartão.
+
