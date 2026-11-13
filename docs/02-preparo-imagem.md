@@ -15,16 +15,18 @@ momentos diferentes.
 
 ## Versões disponíveis para a NEO Air
 
-Diretório oficial: <http://download.friendlyelec.com/NanoPiNEOAir> → `01_Official images`
+> **Atenção:** em 2026 o endereço `download.friendlyelec.com/NanoPiNEOAir` passou a
+> redirecionar para o portal da FriendlyElec. As imagens agora ficam em um Google
+> Drive público — ver [Baixando](#baixando).
 
 | Imagem | Base | Kernel | Observação |
 | --- | --- | --- | --- |
-| `h3-sd-friendlycore-jammy-4.14-armhf-YYYYMMDD.img.gz` | Ubuntu Core 22.04 | 4.14 | **Escolhida** — mais recente, enxuta, sem X |
-| `h3-sd-friendlycore-focal-4.14-armhf-...` | Ubuntu Core 20.04 | 4.14 | Alternativa estável |
-| `h3-sd-friendlycore-xenial-4.14-armhf-...` | Ubuntu Core 16.04 | 4.14 | Antiga; só por compatibilidade |
-| `h3-sd-debian-trixie-core-4.14-armhf-...` | Debian 13 | 4.14 | Boa opção se a aplicação é Debian |
-| `h3-sd-friendlywrt-4.14-armhf-...` | OpenWrt 19.07.1 | 4.14 | Só se o papel for roteador |
-| `h3-sd-debian-jessie-3.4-armhf-...` | Debian 8 desktop | 3.4 | **Evitar** — Allwinner BSP, esquenta e é antigo |
+| `h3-sd-ubuntu-noble-core-4.14-armhf-20260330.img.gz` | Ubuntu Core 24.04 | 4.14 | **Mais recente** — é a que está na eMMC da placa |
+| `h3-sd-friendlycore-jammy-4.14-armhf-20250402.img.gz` | Ubuntu Core 22.04 | 4.14 | FriendlyCore clássico |
+| `h3-sd-friendlycore-focal-kernel4.14-armhf-20250402.img.gz` | Ubuntu Core 20.04 | 4.14 | Alternativa conservadora |
+| `h3-sd-debian-trixie-core-4.14-armhf-20260330.img.gz` | Debian 13 | 4.14 | Boa opção se a aplicação é Debian |
+| `h3-sd-friendlywrt-4.14-armhf-20210512.img.gz` | OpenWrt 19.07.1 | 4.14 | Só se o papel for roteador |
+| `h3-sd-debian-jessie-*` | Debian 8 desktop | 3.4 ou 4.14 | **Evitar** — desatualizado |
 
 ### Por que kernel 4.14 e não 3.4
 
@@ -45,60 +47,68 @@ implica:
 
 ## Baixando
 
-```bash
-mkdir -p ~/nanopi/images && cd ~/nanopi/images
+### Onde as imagens estão
 
-# ajuste a data para a versão mais recente listada no diretório
-BASE=http://download.friendlyelec.com/NanoPiNEOAir
+O endereço histórico `http://download.friendlyelec.com/NanoPiNEOAir` hoje
+responde com redirecionamento para o portal da empresa. As imagens oficiais estão
+em um **Google Drive público**:
 
-# 1) listar o que existe (se o servidor permitir indexação)
-curl -s "$BASE/" | grep -oE 'h3-[a-z0-9.-]+\.img\.gz' | sort -u
+- pasta: <https://drive.google.com/drive/folders/1ZvaUcfgR_uFoupmtFFnTzBH4cQqweE-E>
+- espelho citado no portal: <https://pan.baidu.com/s/1P0j1crgmyN2tANK1936NYA>
+
+Estrutura relevante da pasta:
+
+```
+01_Official images/
+  01_SD card images/          imagens h3-sd-*        (sistema no cartão)
+  02_SD-to-eMMC images/       imagens h3-eflasher-*  (instalador p/ eMMC)
+  03_Partition image files/   .tgz com imagens de partição + latest.json
+02_Third party images/        DietPi, Android, ROMs de acessórios
+04_SDK and toolchain/         ambiente de compilação
 ```
 
-Se a listagem não abrir no `curl`, baixe pelo navegador e mova para a pasta.
-Nomes de arquivo têm a data no final (`YYYYMMDD`) — escolha a mais recente da
-linha `jammy`.
+### Pelo navegador
 
-Download direto (exemplo — **substitua a data**):
+1. Abra a pasta, entre em `01_Official images` → `01_SD card images`.
+2. Baixe o `.img.gz` desejado **e** o `sha256sum.txt` da mesma pasta.
 
-```bash
-curl -LO "$BASE/01_Official%20images/h3-sd-friendlycore-jammy-4.14-armhf-20240101.img.gz"
-```
+### Pela linha de comando (recomendado)
 
-> O caminho com espaço (`01_Official images`) pode vir codificado como `%20`.
-> Se der 404, copie o link real do navegador.
-
-## Verificando a integridade
-
-O servidor da FriendlyElec não publica checksums de forma consistente. Duas
-camadas de proteção, da melhor para a pior:
-
-### 1. Teste do gzip (detecta download truncado/corrompido)
+O Drive não permite `curl` em arquivo direto de forma confiável; use `gdown`
+(fora do sistema, em um venv, para não sujar o Python do host):
 
 ```bash
-gzip -t h3-sd-friendlycore-jammy-4.14-armhf-*.img.gz && echo "OK: arquivo íntegro"
+python3 -m venv /tmp/venv
+/tmp/venv/bin/pip install -q gdown
+
+# listar a pasta (não baixa nada)
+/tmp/venv/bin/gdown --folder \
+  "https://drive.google.com/drive/folders/1ZvaUcfgR_uFoupmtFFnTzBH4cQqweE-E" \
+  --skip-download
+
+# baixar um arquivo pelo ID (o ID aparece na listagem)
+/tmp/venv/bin/gdown <ID> -O h3-sd-ubuntu-noble-core-4.14-armhf-20260330.img.gz -c
 ```
 
-Isso valida o CRC interno do gzip. **É a verificação mínima obrigatória.**
-
-### 2. SHA-256 registrado manualmente
+`-c` retoma download interrompido. Para o checksum:
 
 ```bash
-sha256sum h3-sd-friendlycore-jammy-4.14-armhf-*.img.gz | tee SHA256SUMS.txt
+/tmp/venv/bin/gdown <ID_DO_sha256sum.txt> -O sha256sum.txt
+grep 'ubuntu-noble-core' sha256sum.txt | sha256sum -c -
+# h3-sd-ubuntu-noble-core-4.14-armhf-20260330.img.gz: OK
 ```
 
-Guarde o `SHA256SUMS.txt` junto da imagem. Na próxima vez que for gravar, você
-compara — se mudou sem você trocar o arquivo, algo aconteceu.
+### Verificação — obrigatória
 
-### 3. Conferir o que veio dentro (sem descompactar tudo)
+O `sha256sum.txt` oficial é a referência. Confira **as duas** coisas:
 
 ```bash
-# tamanho descompactado e nome interno
-gzip -l h3-sd-*.img.gz
+gzip -t h3-sd-*.img.gz && echo "gzip OK"     # arquivo não truncado
+sha256sum -c sha256sum.txt --ignore-missing  # confere o hash oficial
 ```
 
-Tamanho descompactado típico: **1 a 4 GB**. Se aparecer algo como 100 MB, o
-arquivo está errado (provavelmente é o eflasher ou um download parcial).
+Guarde o `sha256sum.txt` junto da imagem. Sem ele, "verificar" vira só um teste
+de gzip — que detecta truncamento, mas não substituição/corrupção silenciosa.
 
 ## Registro de versão
 

@@ -72,7 +72,12 @@ sudo fdisk -l /dev/sdX
 ## Ordem de conferência antes do primeiro boot
 
 1. Fonte é realmente 5 V e ≥ 2 A? (leia a etiqueta, não confie na memória)
-2. Cartão é Classe 10 e ≥ 8 GB?
-3. Adaptador serial está em **3.3 V**? (jumper de tensão conferido)
-4. Antena Wi-Fi conectada?
-5. A placa está sobre superfície **não condutiva**? (a parte de baixo tem contatos)
+2. **O pino VDD_5V do adaptador serial está desconectado?** (só GND/TX/RX)
+3. Cartão é Classe 10 e ≥ 8 GB?
+4. Adaptador serial está em **3.3 V**? (jumper de tensão conferido)
+5. Antena Wi-Fi conectada?
+6. A placa está sobre superfície **não condutiva**? (a parte de baixo tem contatos)
+
+> Sintoma clássico de duas fontes / fonte fraca: a placa inicia, mostra parte do
+> boot e reinicia em loop a cada poucos segundos, **sem mensagem de erro**.
+> Ver [log de bordo](12-log-de-bordo.md#sessão-2--2026-11-13--causa-do-loop-identificada).

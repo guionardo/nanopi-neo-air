@@ -142,8 +142,12 @@ Regras práticas:
 
 - Para cargas (relé, LED de potência, motor) use **driver**: transistor/MOSFET,
   módulo relé com optoacoplador ou ULN2803. O GPIO só manda sinal.
-- Se alimentar por um dos pinos VDD_5V, garanta que o microUSB não esteja
-  alimentando ao mesmo tempo por outra fonte com tensão diferente.
+- **Nunca use duas fontes ao mesmo tempo.** Alimentar pelo microUSB **e** pelo
+  pino VDD_5V simultaneamente liga as duas fontes em paralelo (não há proteção
+  ideal no caminho). Se uma delas for fraca — típico de adaptador USB-serial
+  (≈100 mA) — a placa reinicia em loop quando a carga sobe.
+- O adaptador serial deve fornecer **somente GND, TX e RX**. O pino 2 (VDD_5V)
+  fica **desconectado**, sempre.
 - Nada de divisor resistivo "para ler 12 V" no GPIO sem conferir a tensão
   resultante — meça antes de conectar.
 

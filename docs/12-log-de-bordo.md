@@ -158,15 +158,124 @@ md.b 0x43100000 0x57e             # dump hex para inspecionar o boot.cmd
 > `dtb_addr` (eles vêm do `uEnv.txt`). Para bootar manualmente é preciso usar os
 > valores literais `0x46000000` / `0x47000000` / `0x48000000`.
 
-### Estado ao final da sessão
+### Estado ao final da sessão 1
 
 - Placa parada em `Waiting for root device` (requer power-cycle para sair).
-- Diagnóstico **pendente de confirmação da fonte de alimentação**.
 - Nenhuma alteração foi gravada na eMMC (só leitura e boot em RAM).
 
-### Próximos passos definidos
+---
 
-1. Confirmar/ trocar a fonte por **5 V / 2 A dedicada** e repetir o boot.
-2. Se o loop persistir com fonte adequada → tratar como eMMC com imagem inválida
-   e refazer o eflasher a partir de um cartão SD ([05](05-gravacao-emmc.md)).
-3. Registrar no [11-decisoes.md](11-decisoes.md) os dados da placa (MAC, versão).
+## Sessão 2 — 2026-11-13 · causa do loop identificada
+
+### Achado 5 — a placa estava com **duas fontes** ligadas ao mesmo tempo
+
+Configuração encontrada: alimentação pelo pino **VDD_5V do adaptador serial** (que
+entrega pouquíssima corrente) **e** um carregador de celular no microUSB.
+
+Isso explica todo o comportamento observado:
+
+| Observação | Explicação |
+| --- | --- |
+| Estável no prompt do U-Boot (minutos) | carga baixa, eMMC/Wi-Fi desligados |
+| Estável sem initrd (35 s) | driver MMC não carrega, eMMC não é energizada |
+| Reset ~0,3 s após o udev iniciar | coldplug energiza eMMC + Wi-Fi → pico de corrente → brownout |
+| Sem `panic`/`oops` no log | não é software: o SoC é reiniciado por subtensão |
+
+O adaptador PL2303 não é fonte: alimentar a placa por ele funciona até a carga
+subir, e então o sistema reinicia em loop.
+
+### Achado 6 — a imagem da eMMC é oficial (Ubuntu Noble Core)
+
+A pasta oficial de downloads foi mapeada e o sistema da eMMC corresponde a:
+
+```
+h3-eflasher-ubuntu-noble-core-4.14-armhf-20260330.img.gz
+```
+
+Ou seja: o `systemd 255.4-1ubuntu8.2` observado é **Ubuntu Core 24.04**, coerente
+com a imagem mais recente publicada para H3. O `bad CRC` no ambiente do U-Boot é
+comportamento normal quando a variável de ambiente nunca foi salva (imagem
+gravada "crua" não tem env válido) — **não** indica corrupção por si só.
+
+Isso **rebaixa** a hipótese 2 da sessão 1 (imagem corrompida). A hipótese 1
+(fonte) passa a ser a única consistente com as evidências.
+
+### Achado 7 — o endereço oficial de download mudou
+
+`download.friendlyelec.com/NanoPiNEOAir` redireciona para o portal; as imagens
+estão em um Google Drive público (ver [02](02-preparo-imagem.md#baixando)).
+Existem `sha256sum.txt` oficiais — usar sempre.
+
+### Correção aplicada
+
+- Fio **VDD_5V removido** do adaptador serial: restaram GND (pino 1), TX (pino 3)
+  e RX (pino 4).
+- Alimentação passou a ser **somente** pelo microUSB, com carregador 5 V / 2 A.
+
+### Próximos passos (da sessão 2)
+
+1. Power-cycle com fonte única e capturar o boot completo.
+2. Se subir: tentar login (`root`/`fa` nas imagens core da FriendlyElec; `pi`/`pi`
+   nas com interface) e validar rede/SSH.
+3. Se não subir: gravar `h3-sd-ubuntu-noble-core-...img.gz` no cartão SD e usar o
+   sistema pelo cartão para diagnosticar/refazer a eMMC.
+4. Registrar no [11-decisoes.md](11-decisoes.md) os dados da placa (MAC, versão).
+
+---
+
+## Sessão 3 — 2026-11-13 · fonte corrigida, novo obstáculo
+
+### Resultado da correção de alimentação: **loop de reset resolvido**
+
+Com o fio VDD_5V removido e a placa alimentada só pelo carregador, o boot
+completou. Confirmação: o console passou a exibir prompt de login em vez de
+reiniciar. Causa do loop fechada — era subtensão, como suspeitado.
+
+### Achado 8 — loop de getty inutiliza o console
+
+O console não fica utilizável: aparece um ciclo contínuo
+
+```
+username = pi
+Password = pi
+
+NanoPi-NEO-Air login: username = pi
+Password = pi
+
+NanoPi-NEO-Air login: ...
+```
+
+medições:
+
+| Medida | Valor |
+| --- | --- |
+| Ocorrências de `login:` em 2 s | **25.652** |
+| Bytes recebidos em 2 s | 1.333.904 |
+| Taxa aparente | ~667 kB/s |
+
+A taxa é fisicamente impossível em 115200 8N1 (máx. ~11,5 kB/s), então há também
+**duplicação/entrega anômala pelo adaptador** sob fluxo contínuo (PL2303 genérico).
+Fica registrado como pendência de instrumentação: para medir taxa real, usar outro
+adaptador (CP2102/FT232) ou um analisador lógico.
+
+Interpretação do loop: o `login` (ou o `agetty --autologin pi`) sai imediatamente e
+é reiniciado, reimprimindo o banner (`/etc/issue`) com as credenciais sugeridas.
+Consequências práticas:
+
+- **não é possível digitar comandos** (o processo que lê o console morre antes);
+- a placa provavelmente está com o restante do sistema **no ar** (o loop é local ao
+  getty);
+- `pi`/`pi` e `root`/`fa` não puderam ser testados por essa via.
+
+### Achado 9 — sem SysRq neste adaptador
+
+`tcsendbreak()` e `ioctl(TIOCSBRK)` falham com `EPIPE` no PL2303: o chip não
+implementa BREAK. Logo, **não há como reiniciar a placa pelo software** — o
+power-cycle é obrigatório.
+
+### Ferramenta criada
+
+[`scripts/serial-boot-override.py`](../scripts/serial-boot-override.py): fica
+esperando o próximo boot, interrompe o autoboot e inicia o kernel com cmdline
+própria (por padrão `init=/bin/sh`), liberando o console para recuperação.
+
