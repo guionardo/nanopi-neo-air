@@ -67,6 +67,13 @@ MNT=$(mktemp -d)
 cleanup() { umount "$MNT" 2>/dev/null || true; rmdir "$MNT" 2>/dev/null || true; }
 trap cleanup EXIT
 
+# se o desktop automontou a partição, solta antes (evita dois pontos de montagem)
+while read -r mp; do
+  [[ -z $mp ]] && continue
+  info "desmontando montagem automática em $mp..."
+  umount "$mp" || die "falha ao desmontar $mp"
+done < <(findmnt -rno TARGET --source "$ROOTFS" 2>/dev/null || true)
+
 info "montando $ROOTFS (somente para leitura/escrita do cartão)..."
 mount -t ext4 "$ROOTFS" "$MNT" || die "falha ao montar $ROOTFS"
 
@@ -87,7 +94,6 @@ info "instalando flash-emmc.service..."
 cat > "$MNT/etc/systemd/system/flash-emmc.service" <<'EOF'
 [Unit]
 Description=Grava eMMC a partir do payload do eflasher (headless, sem GUI)
-DefaultDependencies=no
 After=local-fs.target systemd-modules-load.service
 Before=eflasher-gui.service multi-user.target
 ConditionPathExists=/opt/headless/ARMED
