@@ -400,3 +400,114 @@ p3 segue inutilizável. Um sistema assim não é confiável para produção.
 
 **Decisão:** descartar o reparo e regravar a eMMC pelo eflasher do cartão.
 
+
+---
+
+## Sessão 5 — 2026-11-13 · gravação da eMMC pelo eflasher, sem GUI
+
+### Contexto
+
+O cartão SD identificado na sessão 4 é um **eflasher** com o payload
+`debian-bookworm-core`. A GUI (`/opt/eflasher-gui`, Qt) não funciona no NEO Air
+porque a placa não tem display — e a eMMC não foi tocada (mesmas partições,
+mesmo hostname).
+
+### Achado 15 — o payload é Android sparse, não imagem crua
+
+`rootfs.img` e `userdata.img` começam com `3a ff 26 ed` = **0xED26FF3A**, magic
+do formato *Android sparse*. `dd` direto produz lixo — foi exatamente o que
+aconteceu na primeira tentativa (p2 ficou sem superbloco ext4: `Bad magic number
+in super-block`). O `boot.img`, por contraste, começa com `eb 3c 90 6d` e é FAT
+cru — esse `dd` está correto.
+
+`partmap.txt` define tudo:
+
+```text
+flash=mmc,0:boot0:raw:0x2000,0x17FE000:u-boot-sunxi-with-spl.bin
+flash=mmc,0:boot:fat:0x1800000,0x2800000:boot.img
+flash=mmc,0:rootfs:ext4:0x4000000,0x58000000:rootfs.img
+flash=mmc,0:userdata:ext4:0x5C000000,0x0:userdata.img
+```
+
+Conferência importante: o U-Boot da eMMC é **byte a byte igual** ao
+`u-boot-sunxi-with-spl.bin` do cartão na área de usuário (offset 0x2000) — e
+**diferente** na partição `boot0` de hardware. Portanto grava-se em
+`/dev/mmcblk3`, não em `mmcblk3boot0`.
+
+### Achado 16 — ambiente sem `simg2img` e sem `python3`
+
+Nem o host, nem o rootfs do eflasher têm `simg2img`. O rootfs do cartão também
+não tem `python3`. Solução: um decodificador de sparse em **bash puro**
+([`scripts/unsparse.sh`](../scripts/unsparse.sh)), que lê os cabeçalhos com
+`od -j` e grava cada chunk com `dd` direto no dispositivo.
+
+Tipos de chunk (confirmados no `rootfs.img`, 31 chunks):
+
+| Tipo | Valor | Ação |
+| --- | --- | --- |
+| `CAC1` raw | 51905 | `dd` do arquivo para o destino |
+| `CAC2` fill | 51906 | zerar (padrão de 4 bytes) |
+| `CAC3` dont-care | 51907 | zerar |
+| `CAC4` crc | 51908 | ignorar |
+
+Soma dos chunks: 360.448 blocos × 4096 = **1.476.395.008 bytes**, exatamente o
+tamanho da p2.
+
+### Achado 17 — o SD fica instável sob leitura longa
+
+Durante o `dd` de 1,2 GB do exFAT:
+
+```text
+sunxi-mmc 1c0f000.mmc: data error, sending stop command
+mmcblk1: timed out sending r/w cmd command, card status 0x900
+mmc1: Problem switching card into high-speed mode!
+```
+
+A cada ~14 s o cartão é reiniciado e renegocia velocidade. Leituras curtas
+(2 MB, 40 MB) passam; leitura contínua de 1,2 GB não. Suspeitas, em ordem:
+driver **exFAT out-of-tree 1.2.9** (kernel 4.14) sob I/O longo, cartão de 64 GB
+de qualidade duvidosa, ou alimentação marginal durante leitura+escrita
+simultâneas. Pendente de discriminar.
+
+### Estado ao final da sessão 5
+
+| Item | Estado |
+| --- | --- |
+| U-Boot na eMMC (0x2000) | ✅ gravado e idêntico ao payload |
+| p1 (boot, FAT) | ✅ `boot.img` gravado |
+| p2 (rootfs) | ❌ inválida — tentativa com `dd` cru; precisa do decodificador |
+| p3 (userdata) | ❌ inválida pelo mesmo motivo |
+| Decodificador | ✅ em `/tmp/u` no rootfs do cartão |
+| Shell de trabalho | `[SD]#` (initramfs) com rootfs do cartão em `/newroot` |
+
+### Como retomar (sem GUI)
+
+Com o SD no slot e a placa no shell do initramfs:
+
+```sh
+# 1. montar o rootfs do cartao e o payload
+mkdir -p /newroot
+mount -t ext4 /dev/mmcblk1p3 /newroot
+mount -t proc proc /newroot/proc
+mount -t sysfs sys /newroot/sys
+mount --bind /dev /newroot/dev
+chroot /newroot /bin/bash -c 'modprobe exfat; mount -t exfat /dev/mmcblk1p1 /mnt'
+
+# 2. reconstruir o decodificador (se /tmp/u sumiu)
+#    scripts/serial-put.py envia o arquivo por base64
+
+# 3. gravar (p2)
+chroot /newroot /bin/bash -c \
+  'bash /tmp/u /mnt/debian-bookworm-core/rootfs.img /dev/mmcblk3 67108864 31'
+
+# 4. gravar (p3)
+chroot /newroot /bin/bash -c \
+  'bash /tmp/u /mnt/debian-bookworm-core/userdata.img /dev/mmcblk3 1543503872 8'
+
+# 5. verificar
+e2fsck -fn /dev/mmcblk3p2
+```
+
+> A numeração muda conforme o *boot device* do U-Boot: com o cartão no slot, o
+> SD é `mmcblk1` e a eMMC é `mmcblk3`. O `boot.cmd` do eflasher ajusta isso no
+> device tree com `fdt set mmc<X> boot_device <1>`.

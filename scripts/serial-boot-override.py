@@ -83,10 +83,17 @@ class Reader:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", default="/dev/ttyUSB0")
+    ap.add_argument("--dev", default="mmc 0",
+                    help="dispositivo U-Boot de onde carregar; use 'mmc 0:2' "
+                         "quando a particao FAT nao for a primeira "
+                         "(cartao eflasher tem exFAT na p1)")
     ap.add_argument("--wait", type=float, default=300,
                     help="segundos aguardando o proximo boot (padrao 300)")
     ap.add_argument("--bootargs", default=DEFAULT_BOOTARGS)
     ap.add_argument("--dtb", default="sun8i-h3-nanopi-neo-air.dtb")
+    ap.add_argument("--pre", action="append", default=[],
+                    help="comando U-Boot extra antes do bootz (pode repetir), "
+                         "ex.: --pre 'fdt set mmc0 max-frequency <25000000>'")
     ap.add_argument("--initrd", default="rootfs.cpio.gz",
                     help="nome do initrd na particao de boot (vazio = sem initrd)")
     ap.add_argument("--listen", type=float, default=25,
@@ -124,16 +131,21 @@ def main():
         os.write(fd, b"\r")
         r.pump(1.0)
 
-    print("prompt U-Boot assumido; carregando kernel", flush=True)
-    steps = [(f"fatload mmc 0 {ADDR_KERNEL} zImage", 2.5)]
+    print(f"prompt U-Boot assumido; carregando kernel de '{args.dev}'",
+          flush=True)
+    steps = [(f"fatload {args.dev} {ADDR_KERNEL} zImage", 2.5)]
     if args.initrd:
-        steps += [(f"fatload mmc 0 {ADDR_RAMDISK} {args.initrd}", 3.0),
+        steps += [(f"fatload {args.dev} {ADDR_RAMDISK} {args.initrd}", 3.0),
                   ("setenv ramdisk_size ${filesize}", 0.6)]
-    steps += [(f"fatload mmc 0 {ADDR_DTB} {args.dtb}", 1.5),
+    steps += [(f"fatload {args.dev} {ADDR_DTB} {args.dtb}", 1.5),
               (f"setenv bootargs {args.bootargs}", 0.8)]
     for cmd, wait in steps:
         os.write(fd, cmd.encode() + b"\r")
         r.pump(wait)
+
+    for cmd in args.pre:
+        os.write(fd, cmd.encode() + b"\r")
+        r.pump(0.8)
 
     if args.initrd:
         boot = (f"bootz {ADDR_KERNEL} {ADDR_RAMDISK}:${{ramdisk_size}} "
