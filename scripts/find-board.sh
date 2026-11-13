@@ -18,7 +18,7 @@ subnet=${1:-$(ip route | awk '/^default/ {print $3; exit}' | cut -d. -f1-3)}
 printf '==> varrendo %s.0/24 (ping + porta 22)\n' "$subnet"
 
 for i in $(seq 1 254); do
-  ( ping -c1 -W1 "$subnet.$i" >/dev/null 2>&1 ) &
+  ( timeout 2 ping -c1 -W1 "$subnet.$i" >/dev/null 2>&1 ) &
 done
 wait
 
@@ -26,10 +26,10 @@ printf '\n%-16s %-18s %s\n' "IP" "MAC" "SSH"
 printf '%-16s %-18s %s\n' "----------------" "------------------" "----"
 
 found=0
-while read -r ip mac _; do
+while read -r ip mac; do
   [[ $ip == "$subnet."* ]] || continue
   [[ $mac == "<incomplete>" || -z $mac ]] && continue
-  if (exec 3<>/dev/tcp/"$ip"/22) 2>/dev/null; then
+  if timeout 1 bash -c "exec 3<>/dev/tcp/$ip/22" 2>/dev/null; then
     ssh=aberta; found=$((found+1))
   else
     ssh=-
