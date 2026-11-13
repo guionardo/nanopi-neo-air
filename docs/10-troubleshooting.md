@@ -1,0 +1,260 @@
+# 10 — Troubleshooting
+
+Organizado por sintoma. Comece sempre pelas três perguntas:
+
+1. **A fonte é 5 V / 2 A de verdade?** (maioria dos "defeitos" é fonte ou cabo)
+2. **O cartão está bem gravado?** (`gzip -t`, `dd conv=fsync`, cartão Classe 10)
+3. **O console serial mostra algo?** (sem isso, você está adivinhando)
+
+## Boot
+
+### Nada no console serial, LEDs acesos
+
+| Causa provável | Verificação |
+| --- | --- |
+| Adaptador serial em 5 V | jumper de tensão do adaptador |
+| TX/RX invertidos | pino 3 (TXD) → RX do adaptador; pino 4 (RXD) → TX |
+| GND não conectado | pino 1 obrigatório |
+| Baud errado | **115200 8N1**, sem flow control |
+| Porta errada no PC | `dmesg | tail`, `ls /dev/ttyUSB*` |
+| Sem permissão | `sudo usermod -aG dialout $USER` + relogin |
+| Placa não está recebendo energia | LED PWR aceso? |
+
+Teste rápido de que o adaptador está ok: faça **loopback** (junte TX e RX do
+adaptador com um jumper) e digite no terminal — o texto deve voltar.
+
+### Nada no console e LED PWR apagado
+
+Placa sem energia. Teste:
+
+```bash
+# no PC, com um medidor USB: a placa deve puxar ~0,2 A em idle
+```
+
+- cabo microUSB só de carga? troque por um de dados;
+- fonte fraca (< 2 A)? troque;
+- microUSB da placa invertido/forçado? inspecione o conector.
+
+### Para em `Hit any key to stop autoboot`
+
+O u-boot não encontrou kernel/DTB no cartão.
+
+1. Remova e regrave o cartão ([03](03-gravacao-sd.md)).
+2. Verifique se as partições existem e o `boot` tem conteúdo:
+   ```bash
+   sudo mount /dev/sdX1 /mnt && ls /mnt
+   ```
+3. Se a árvore contém `sun50i-*` (H5) em vez de `sun8i-h3-nanopi-neo-air.dtb`,
+   você baixou a imagem de outra placa.
+4. Confirme que a imagem é `h3-...` (H3) e não `h5-...`.
+
+### Para em `Uncompressing Linux...` e reinicia
+
+Kernel incompatível ou RAM com problema. Teste outro cartão/imagem; se persistir
+em qualquer imagem, é hardware.
+
+### Boota, mas `df -h /` mostra ~1.5 GB
+
+A expansão do rootfs não rodou.
+
+```bash
+lsblk
+sudo resize2fs /dev/mmcblk0p2     # ajuste a partição
+```
+
+Se `resize2fs` reclamar que a partição é menor que o filesystem, primeiro
+redimensione a partição com `fdisk`/`parted`, depois o filesystem. Alternativa
+mais simples: regravar o cartão — a expansão é feita no primeiro boot.
+
+### Boot aleatório: às vezes funciona, às vezes não
+
+Clássico de **subtensão**. Troque a fonte antes de suspeitar do software. Também
+pode ser contato do slot microSD — limpe com álcool isopropílico.
+
+## eMMC
+
+### eMMC não inicia (placa "morta" sem cartão)
+
+1. Coloque o cartão `sd` de volta: se boota pelo cartão, a placa está boa e o
+   problema é a eMMC.
+2. Refaça o eflasher ([05](05-gravacao-emmc.md)) com **outra** imagem eflasher.
+3. Se o eflasher falha no meio da escrita, a eMMC pode estar com setores ruins —
+   repita e observe a mensagem exata de erro no console.
+4. Se nada grava, considere usar o sistema pelo cartão permanentemente.
+
+### O eflasher não abre o menu
+
+```bash
+# console serial, root / fa
+eflasher
+```
+
+Se o comando não existir, a imagem gravada não é um eflasher (é uma imagem `sd`).
+Confira o nome do arquivo baixado.
+
+### Instalou mas continua bootando pelo cartão
+
+O cartão está inserido. Remova e energize. Verifique também:
+
+```bash
+findmnt -no SOURCE /
+```
+
+## Rede
+
+### `wlan0` aparece como `unmanaged`
+
+```bash
+sudo cat /etc/network/interfaces
+sudo ls /etc/network/interfaces.d/
+```
+
+Remova qualquer bloco que mencione `wlan0`/`wpa-ssid`, depois:
+
+```bash
+sudo systemctl restart NetworkManager
+nmcli dev status
+```
+
+### Nenhuma rede Wi-Fi encontrada
+
+```bash
+rfkill list
+sudo rfkill unblock all
+sudo iw dev wlan0 scan | grep SSID
+```
+
+- antena U.FL conectada? (sem antena, o alcance é de centímetros)
+- a rede é 5 GHz? O AP6212 é **somente 2.4 GHz**.
+- SSID oculto? conecte com `hidden yes`.
+
+### Conecta mas cai a cada poucos minutos
+
+Power-save do Wi-Fi:
+
+```bash
+sudo iwconfig wlan0 power off
+# permanente:
+echo -e '[connection]\nwifi.powersave = 2' | sudo tee /etc/NetworkManager/conf.d/wifi-powersave-off.conf
+sudo systemctl restart NetworkManager
+```
+
+Sinal fraco também causa isso: `iwconfig wlan0 | grep Signal` (pior que -75 dBm
+é problemático).
+
+### Tem IP mas não navega
+
+```bash
+ip route                 # existe default via <gateway>?
+cat /etc/resolv.conf     # tem nameserver?
+ping -c2 1.1.1.1         # IP funciona?
+ping -c2 deb.debian.org  # DNS funciona?
+```
+
+IP ok + nome falha = DNS. Sem rota default = gateway.
+
+### SSH: `Connection refused` ou `Permission denied`
+
+```bash
+# no console serial
+sudo systemctl status ssh
+sudo systemctl enable --now ssh
+sudo npi-config     # Interfacing Options → SSH → Enable
+```
+
+`Permission denied` com chave: permissões do `~/.ssh` (700) e
+`authorized_keys` (600) no usuário `pi`.
+
+### Me tranquei fora (sem SSH, sem teclado)
+
+Console serial. Se você desabilitou o autologin, faça login com `pi` e a senha
+que definiu. Se perdeu a senha: boot pelo cartão `sd` e edite a eMMC montada, ou
+refaça o eflasher (perde os dados).
+
+## Sistema
+
+### `apt` falha com erro de data/assinatura
+
+Relógio errado (sem NTP):
+
+```bash
+timedatectl
+sudo date -s "2026-11-13 10:00:00"
+sudo apt update
+```
+
+### `Out of memory` / processos mortos pelo kernel
+
+512 MB é pouco:
+
+```bash
+free -h
+sudo dmesg | grep -i -E 'oom|killed process'
+```
+
+- reduza serviços (`systemctl disable --now bluetooth` se não usar);
+- aumente swap (com moderação);
+- limite memória do seu serviço no systemd: `MemoryMax=256M`.
+
+### Temperatura acima de 80 °C
+
+```bash
+cpu_freq
+cpu_freq -s 624000     # reduz clock
+```
+
+- instale dissipador;
+- o kernel 3.4 esquenta muito mais — use 4.14;
+- verifique se há processo em loop (`top`).
+
+### Sistema corrompido após queda de energia
+
+```bash
+sudo fsck -f /dev/mmcblk2p2    # com o sistema desmontado (boot pelo SD)
+```
+
+Prevenção: fonte decente, `sync` antes de desligar, e backup
+([09](09-manutencao.md#backup-e-restauração-da-emmc)).
+
+### `read-only file system`
+
+O kernel remontou o rootfs como somente leitura após erro de I/O — geralmente
+eMMC/cartão com problema ou falta de energia.
+
+```bash
+dmesg | grep -i -E 'I/O error|remount'
+sudo mount -o remount,rw /
+```
+
+Se repetir, o meio está degradado: faça backup e troque (cartão) ou refaça a
+eMMC.
+
+## Diagnóstico por LED (resumo)
+
+| Observado | Interpretação |
+| --- | --- |
+| PWR apagado | sem energia |
+| PWR aceso, STAT sempre apagado | sem boot / kernel travado antes do disco |
+| STAT piscando contínuo e rápido | boot em andamento ou erro repetido |
+| STAT piscando lento (heartbeat) | sistema ok |
+| STAT pisca e para | kernel panic — veja o console |
+| STAT aceso fixo em placa já bootada | processo travado em I/O |
+
+## Coleta de evidências para pedir ajuda
+
+```bash
+{
+  uname -a
+  cat /etc/os-release
+  lsblk
+  df -h
+  free -h
+  cpu_freq
+  nmcli dev status
+  systemctl --failed
+  dmesg -T | tail -100
+} > /tmp/diagnostico.txt 2>&1
+```
+
+Guarde o log do console serial (`picocom -l`) e o `/tmp/diagnostico.txt`. Com
+esses dois arquivos, qualquer problema fica diagnosticável.
