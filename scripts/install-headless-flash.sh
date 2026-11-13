@@ -122,6 +122,38 @@ ln -sf /dev/null "$MNT/etc/systemd/system/eflasher-gui.service"
 install -m 0644 /dev/null "$MNT/opt/headless/ARMED"
 info "auto-flash armado (roda uma vez e se desarma)"
 
+# --- segundo gancho: /etc/rc.local (comprovadamente executado nesta imagem) ---
+# O journal da sessão 4 mostra "Started /etc/rc.local" — é um ponto confiável.
+# O script se desarma sozinho, então rodar pelo rc.local não duplica nada.
+RCLOCAL=$MNT/etc/rc.local
+MARK='# --- auto-flash eMMC (headless) ---'
+HOOK='( /opt/headless/flash-emmc.sh >/dev/null 2>&1 & )'
+[[ -f $RCLOCAL ]] || printf '#!/bin/sh -e\nexit 0\n' > "$RCLOCAL"
+
+if grep -qF "$MARK" "$RCLOCAL"; then
+  info "gancho no rc.local já presente"
+else
+  awk -v mark="$MARK" -v hook="$HOOK" '
+    { line[NR] = $0 }
+    END {
+      placed = 0
+      for (i = 1; i <= NR; i++) {
+        if (!placed && line[i] ~ /^[[:space:]]*exit[[:space:]]+0[[:space:]]*$/) {
+          print mark; print hook; print ""; placed = 1
+        }
+        print line[i]
+      }
+      if (!placed) { print mark; print hook }
+    }' "$RCLOCAL" > "$RCLOCAL.new"
+  mv "$RCLOCAL.new" "$RCLOCAL"
+  chmod 0755 "$RCLOCAL"
+  info "gancho adicionado ao rc.local"
+fi
+
+if ! grep -qF 'opt/headless/flash-emmc.sh' "$RCLOCAL"; then
+  die "não consegui instalar o gancho no rc.local"
+fi
+
 sync
 umount "$MNT"
 trap - EXIT
