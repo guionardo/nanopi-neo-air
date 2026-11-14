@@ -36,19 +36,31 @@ do próprio driver de vídeo do SoC).
 
 ## Pinagem do módulo
 
-O breakout do PCD8544 tem 8 pinos. Os nomes variam um pouco entre fabricantes;
-os equivalentes estão na primeira coluna.
+Lido na serigrafia do módulo em mãos (2026-11-14), na ordem física:
 
-| Módulo | Alias comum | Pino GPIO1 | Função na placa | GPIO Linux |
-| --- | --- | --- | --- | --- |
-| `VCC` | `VDD`, `3V3` | **1** (ou 17) | `SYS_3.3V` | — |
-| `GND` | `GND` | **6** (ou 9, 14, 20) | `GND` | — |
-| `SCLK` | `CLK`, `SCK` | **23** | `SPI0_CLK` | `PC2` = 66 |
-| `DIN` | `MOSI`, `DN`, `SDA` | **19** | `SPI0_MOSI` | `PC0` = 64 |
-| `CS` | `SCE`, `CE` | **24** | `SPI0_CS` | `PC3` = 67 |
-| `DC` | `D/C`, `A0` | **16** | `UART1_RTS` | `PG8` = 200 |
-| `RST` | `RES`, `RST` | **18** | `UART1_CTS` | `PG9` = 201 |
-| `LED` | `BL`, `LED+` | **1/17** via resistor | `SYS_3.3V` | — |
+```text
+  1 RST   2 CE   3 DC   4 DIN   5 CLK   6 VCC   7 LIGHT   8 GND
+  o o     o o    o o    o o     o o     o o     o o       o o
+```
+
+O breakout do PCD8544 tem 8 pinos. `CE` é o *chip enable* (CS) e `LIGHT` é o
+ânodo do backlight; os nomes variam entre fabricantes e estão na coluna de
+aliases.
+
+| Pino | Rótulo | Alias comum | Vai para | GPIO Linux | Função na placa |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `RST` | `RES` | **18** | `PG9` = 201 | `UART1_CTS` |
+| 2 | `CE` | `CS`, `SCE` | **24** | `PC3` = 67 | `SPI0_CS` |
+| 3 | `DC` | `D/C`, `A0` | **16** | `PG8` = 200 | `UART1_RTS` |
+| 4 | `DIN` | `MOSI`, `DN`, `SDA` | **19** | `PC0` = 64 | `SPI0_MOSI` |
+| 5 | `CLK` | `SCLK`, `SCK` | **23** | `PC2` = 66 | `SPI0_CLK` |
+| 6 | `VCC` | `VDD`, `3V3` | **1** (ou 17) | — | `SYS_3.3V` |
+| 7 | `LIGHT` | `LED`, `BL` | **1/17** via resistor | — | `SYS_3.3V` |
+| 8 | `GND` | `GND` | **6** (ou 9, 14, 20) | — | `GND` |
+
+> A ordem física (RST primeiro, GND por último) é a mesma dos módulos
+> "Nokia 5110" tradicionais. Ao conferir o cabo, use **rótulo**, não posição:
+> um cabo invertido coloca `VCC` no `GND` e queima o módulo.
 
 ### Por que esses pinos e não os "óbvios"
 
@@ -67,12 +79,12 @@ os equivalentes estão na primeira coluna.
 
 ```text
         GPIO1 (24 pinos)                    módulo PCD8544
-  1  3V3  ───────────────────────────────  VCC
+  1  3V3  ───────────────────────────────  VCC   (pino 6)
   2  5V   (não usar)
   3  I2C0_SDA
   4  5V   (não usar)
   5  I2C0_SCL
-  6  GND  ───────────────────────────────  GND
+  6  GND  ───────────────────────────────  GND   (pino 8)
   7  PG11 (livre — dimmer futuro)
   8  UART1_TX (livre)
   9  GND
@@ -82,17 +94,17 @@ os equivalentes estão na primeira coluna.
  13  UART2_RTS ← ocupado pela serial
  14  GND
  15  UART2_CTS ← ocupado pela serial
- 16  PG8  ───────────────────────────────  DC
+ 16  PG8  ───────────────────────────────  DC    (pino 3)
  17  3V3  (alternativa para VCC)
- 18  PG9  ───────────────────────────────  RST
- 19  PC0  ───────────────────────────────  DIN (MOSI)
+ 18  PG9  ───────────────────────────────  RST   (pino 1)
+ 19  PC0  ───────────────────────────────  DIN   (pino 4, MOSI)
  20  GND
  21  PC1  (MISO — o PCD8544 não transmite, fica vazio)
  22  UART2_RX ← ocupado pela serial
- 23  PC2  ───────────────────────────────  SCLK
- 24  PC3  ───────────────────────────────  CS
+ 23  PC2  ───────────────────────────────  CLK   (pino 5)
+ 24  PC3  ───────────────────────────────  CE    (pino 2, CS)
 
- extra: LED do módulo ──[ R = 100 Ω ]── pino 1 ou 17 (o mesmo 3,3 V do VCC)
+ extra: LIGHT (pino 7) ──[ R = 100 Ω ]── pino 1 ou 17 (o mesmo 3,3 V do VCC)
 ```
 
 O `LED` do backlight não vai para GPIO nenhum neste projeto: ele sai do mesmo
@@ -101,7 +113,7 @@ deixa o `PG11` (pino 7) livre para um dimmer com transistor mais tarde, sem
 remexer na fiação.
 
 O módulo é **write-only**: o pino `MISO` (pino 21) fica sem ligação. São 7 fios
-até o header (`VCC`, `GND`, `SCLK`, `DIN`, `CS`, `DC`, `RST`) mais o `LED`, que
+até o header (`VCC`, `GND`, `CLK`, `DIN`, `CE`, `DC`, `RST`) mais o `LIGHT`, que
 se deriva do próprio `VCC` pelo resistor.
 
 ## A armadilha do CS (leia antes de soldar)
@@ -151,8 +163,12 @@ apagada: sobra pouca tensão para o resistor limitar. O caminho prático:
 1. comece com **100 Ω** em série e meça a corrente com o multímetro;
 2. se estiver apagado, desça para **47 Ω** ou **33 Ω**;
 3. mire em **10–25 mA** no total — acima de 30 mA esquenta e não melhora a leitura;
-4. vários breakouts já têm resistor embutido na placa; nesse caso o `LED` pode ir
-   direto ao 3,3 V (confira a presença do componente perto do pino `LED`).
+4. vários breakouts já têm resistor embutido na placa; nesse caso o `LIGHT` pode
+   ir direto ao 3,3 V (confira a presença do componente perto do pino `LIGHT`).
+
+> Atalho de montagem: `VCC` (pino 6) e `LIGHT` (pino 7) são vizinhos no módulo.
+> O resistor pode ser soldado **direto entre os dois pinos**, sem fio extra —
+> um jumper de 3,3 V alimenta os dois de uma vez.
 
 Sequência de conferência com multímetro, **antes** de energizar:
 
@@ -221,6 +237,7 @@ e o renderizador descritos em [B-001](13-backlog.md#b-001--display-lcd-nokia-511
 ## Pendências desta etapa
 
 - [x] ~~confirmar a variante do breakout~~ — **3,3 V puro**, sem level shifter
+- [x] ~~registrar os rótulos do módulo~~ — `RST, CE, DC, DIN, CLK, VCC, LIGHT, GND`
 - [x] ~~decidir backlight~~ — fixo em 3,3 V por resistor; `PG11` fica para um dimmer futuro
 - [ ] decidir CS por software (pino 24) ou aterrado — o padrão documentado é software
 - [ ] rodar o teste de fumaça e registrar o resultado no log de bordo

@@ -31,16 +31,19 @@ console. Pequeno, barato, ligado no header GPIO1.
 O "Nokia 5110" é o módulo de breakout do controlador **PCD8544**: 84x48 pixels
 monocromático, SPI write-only, alimentação e lógica em **3,3 V**.
 
-| Módulo | Placa (GPIO1) | Observação |
-| --- | --- | --- |
-| `VCC` | pino 1 ou 17 (`SYS_3.3V`) | **nunca** no pino 2/4 (`VDD_5V`) |
-| `GND` | pino 6, 9, 14 ou 20 | |
-| `SCLK` | pino 23 (`SPI0_CLK`, GPIOC2) | |
-| `DIN` (MOSI) | pino 19 (`SPI0_MOSI`, GPIOC0) | módulo não transmite: MISO fica livre |
-| `CE` (CS) | pino 24 (`SPI0_CS`, GPIOC3) | ou um GPIO comum, se preferir não usar CS0 |
-| `DC` | GPIO livre, ex.: pino 12 (`GPIOA6`, gpio 6) | seleciona dado/comando |
-| `RST` | GPIO livre, ex.: pino 11 (`UART2_TX`, gpio 0) | |
-| `LED` (backlight) | 3,3 V via resistor **ou** GPIO com transistor | se GPIO, permite PWM/dimmer |
+| Pino do módulo | Rótulo | Placa (GPIO1) | Observação |
+| --- | --- | --- | --- |
+| 6 | `VCC` | pino 1 ou 17 (`SYS_3.3V`) | **nunca** no pino 2/4 (`VDD_5V`) |
+| 8 | `GND` | pino 6, 9, 14 ou 20 | |
+| 5 | `CLK` | pino 23 (`SPI0_CLK`, `PC2`) | |
+| 4 | `DIN` | pino 19 (`SPI0_MOSI`, `PC0`) | módulo não transmite: MISO fica livre |
+| 2 | `CE` (CS) | pino 24 (`SPI0_CS`, `PC3`) | o kernel **não** aciona este pino: CS por software |
+| 3 | `DC` | pino 16 (`UART1_RTS`, `PG8`) | |
+| 1 | `RST` | pino 18 (`UART1_CTS`, `PG9`) | |
+| 7 | `LIGHT` | 3,3 V por resistor (100 Ω → medir) | `PG11` livre para dimmer futuro |
+
+Pinagem detalhada, cuidados elétricos e teste de fumaça:
+[14-display-lcd.md](14-display-lcd.md).
 
 Cuidados:
 
