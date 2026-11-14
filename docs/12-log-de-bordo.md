@@ -1023,3 +1023,20 @@ openssh 9.2p1-2+deb12u1 -> +deb12u10 · network-manager 1.42.4-1 -> +deb12u1
 vem fora do apt, então atualizar não mata o boot. Ainda assim, `systemd` e
 `network-manager` são justamente o que sustenta o acesso remoto: fazer com o
 cartão SD à mão, e só depois de senha forte definida.
+
+### Boot limpo depois do enxugamento
+
+```text
+host: ctl-nanopi  up: up 1 minute
+timezone: America/Sao_Paulo  sync: yes  hora: 2026-11-14 15:29:14 -03
+serviços: cron dbus NetworkManager ntpsec rsyslog serial-getty@ttyS0 ssh
+          systemd-{journald,logind,udevd} user@0 wpa_supplicant
+portas:   tcp 22 · udp 123
+unidades falhando: 0
+wifi: minha-rede, -31 dBm, power save off
+ram: 77 MB usados de 491 MB
+```
+
+**Zero unidades falhando** (antes o `systemd-binfmt` falhava em todo boot), sem
+bluetooth, sem getty em tty1, hora sincronizada sozinha e Wi-Fi de volta no mesmo
+IP. O sistema base está fechado.
