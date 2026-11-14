@@ -94,6 +94,9 @@ Detalhes de implementação do conteúdo:
 Recomendação preliminar: **A** para prototipar (mede-se o valor real da
 informação), e só migrar para **B** se o objetivo virar "console local" de fato.
 
+A pinagem, os cuidados elétricos e o teste de fumaça estão em
+[14-display-lcd.md](14-display-lcd.md).
+
 ### Requisitos técnicos que a implementação precisa respeitar
 
 - não bloquear o boot: o serviço do display deve ter `After=multi-user.target` e
@@ -115,5 +118,6 @@ informação), e só migrar para **B** se o objetivo virar "console local" de fa
       investimento: fbtft + console local é bem mais trabalho)
 - [ ] escolher a fonte dos dados (arquivo de status vs. ler `/sys` direto)
 - [ ] decidir se o sinal Wi-Fi entra na tela (sugerido: sim)
-- [ ] validar que o `spidev0.0` funciona no kernel 4.14 da FriendlyElec
-      (pode exigir habilitar o overlay de SPI no `uEnv.txt`/DTB)
+- [x] validar que o `spidev0.0` funciona no kernel 4.14 da FriendlyElec —
+      **já existe no DTB** (`/dev/spidev0.0`, 10 MHz, 0 erros num teste de
+      2536 bytes); ver [14-display-lcd.md](14-display-lcd.md)

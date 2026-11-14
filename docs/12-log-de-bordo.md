@@ -1100,3 +1100,69 @@ ainda está fazendo a primeira sincronização. Em ~40 s vira `yes`. **Não** é
 sintoma de problema; só vale checar se continuar `no` depois de alguns minutos,
 porque aí a causa é o RTC sem bateria (`RTC time: 2023-11-10`) somado a falta de
 rede — ver [troubleshooting](10-troubleshooting.md).
+
+---
+
+## Sessão 14 — 2026-11-14 · display Nokia 5110: barramento validado
+
+O usuário confirmou que **já tem o display** (PCD8544 84x48). Antes de soldar
+qualquer coisa, o barramento foi inspecionado no sistema em produção.
+
+### Achado 30 — o SPI0 já vem pronto no DTB do vendor
+
+Não é preciso overlay nem `uEnv.txt`: `/dev/spidev0.0` já existe no boot.
+
+```text
+$ cat /sys/class/spi_master/spi0/device/modalias
+of:NspiT<NULL>Callwinner,sun8i-h3-spi
+$ cat /sys/bus/spi/devices/spi0.0/of_node/compatible
+nanopi,spidev
+$ cat /sys/bus/spi/devices/spi0.0/of_node/spi-max-frequency
+10 MHz
+```
+
+O device tree também traz um `pitft@0` (ST7789V) e um `pitft-ts@1` (ADS7846,
+touch) — ambos **`status = "disabled"`**, então não disputam o barramento. O
+`spiflash@0` também está desabilitado.
+
+### Achado 31 — o kernel NÃO aciona o chip select
+
+Esse é o detalhe que faria o display parecer queimado:
+
+```text
+pin 67 (PC3): 1c68000.spi (GPIO UNCLAIMED) function gpio_out group PC3
+```
+
+- `PC3` (pino 24, o CS do header) está em função **`gpio_out`**, não em `spi0`;
+- `cs-gpios` do DTB aponta para `PC3` **e** `PA6`, mas o `sun6i-spi` 4.14 ignora
+  essa propriedade — nenhum dos dois é reivindicado (`GPIO UNCLAIMED`);
+- o nível de repouso de `PC3` é **alto**: o display nunca é selecionado.
+
+Solução: acionar o CS por software (`gpio 67`) ou aterrar o pino. As duas opções
+estão no script de teste e documentadas em
+[14-display-lcd.md](14-display-lcd.md#a-armadilha-do-cs-leia-antes-de-soldar).
+
+### Achado 32 — pinos 11/22 não servem para DC/RST
+
+`PA0` e `PA1` estão com a função `uart2` **tomada pelo driver serial**
+(`1c28800.serial`), mesmo sem getty neles. Já `PA6` (pino 12) faz parte do
+pinctrl do SPI0 (é o segundo CS do pitft). Os GPIOs realmente livres no header
+são `PG8`, `PG9` e `PG11` — confirmados com `export` + `direction out` + `value`.
+
+### Ferramenta criada
+
+[`scripts/pcd8544-smoke-test.py`](../scripts/pcd8544-smoke-test.py) — teste de
+fumaça sem dependências (nada de `python3-spidev` ou PIL): fala com
+`/dev/spidev0.0` por `ioctl` e com DC/RST/CS por `/sys/class/gpio`.
+
+Detalhe que custou um `EINVAL`: `SPI_IOC_MESSAGE(N)` é `_IOW('k', 0, N *
+sizeof(struct spi_ioc_transfer))` — **sem** o `+4` que muita receita por aí usa.
+No armhf o struct tem 32 bytes, então o ioctl correto é `0x40206B00`.
+
+Rodado sem display, só para validar barramento e GPIOs:
+
+```text
+bytes_tx: 0 -> 2536   errors: 0
+```
+
+2536 = 5 × 504 (quadros) + 6 (init) + 2 × 5 (endereço por quadro).

@@ -19,6 +19,7 @@ Ordem sugerida de leitura = ordem numérica.
 | 11 | [Decisões e pendências](11-decisoes.md) | ADRs curtos e o que falta definir | 📝 vivo |
 | 12 | [Log de bordo](12-log-de-bordo.md) | O que foi realmente observado na bancada, com evidências | 📝 vivo |
 | 13 | [Backlog de funcionalidades](13-backlog.md) | Ideias futuras com contexto técnico (ex.: display LCD Nokia 5110) | 💡 vivo |
+| 14 | [Display LCD Nokia 5110](14-display-lcd.md) | Ligação elétrica, mapa do header e teste de fumaça | 🔌 hardware |
 | 99 | [Referências](99-referencias.md) | Links oficiais e comunidade | ✅ |
 
 ## Checklists de progresso
