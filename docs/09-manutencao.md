@@ -127,24 +127,51 @@ Política sugerida para controlador em produção:
 | `apt full-upgrade` | só com backup feito | médio/alto |
 | trocar de kernel | praticamente nunca | alto |
 
-Fluxo seguro:
+Fluxo seguro (foi o usado em 2026-11-14, com 163 pacotes):
 
 ```bash
-# 1. backup da eMMC (seção abaixo)
-# 2. atualizar
-sudo apt update && sudo apt upgrade -y
-# 3. reiniciar e validar
+# 1. backup do que é difícil de reconstruir (a eMMC tem o backup completo abaixo)
+sudo mkdir -p /root/pre-upgrade
+sudo dpkg -l > /root/pre-upgrade/packages-before.txt
+sudo cp -a /etc/NetworkManager/system-connections/minha-rede.nmconnection /root/pre-upgrade/
+sudo cp -a /etc/ssh/sshd_config /root/pre-upgrade/
+
+# 2. atualizar DESTACADO, para o SSH cair e o upgrade continuar
+sudo setsid nohup sh -c 'DEBIAN_FRONTEND=noninteractive apt-get -y \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+  full-upgrade' > /root/pre-upgrade/upgrade.log 2>&1 < /dev/null &
+
+# 3. acompanhar de outro terminal
+ssh root@ctl-nanopi 'tail -f /root/pre-upgrade/upgrade.log'   # termina com EXIT=0
+
+# 4. validar antes do reboot
+ssh root@ctl-nanopi 'apt-get -s upgrade | tail -1; dpkg --audit; systemctl --failed'
+
+# 5. reiniciar e conferir
 sudo reboot
-# 4. conferir
-uname -r; systemctl --failed
+uname -r; systemctl --failed; iw dev wlan0 link | head -4
 ```
 
-Segure pacotes que você não quer que mudem:
+Dois detalhes que evitam susto:
+
+- **`--force-confold`**: sem isso o `dpkg` para num prompt de conffile e o
+  upgrade travado derruba o acesso. Mantém o arquivo local (o `sshd_config` e o
+  perfil do NM ficam como estão).
+- **upgrade destacado**: `systemd` reinicia serviços no meio do caminho. Se o
+  SSH morrer, o `setsid` garante que o `apt` continua; basta reconectar.
+
+### Nesta placa não há kernel para segurar
+
+O kernel vem do payload da FriendlyElec (`4.14.111`), **não** do apt: a lista de
+upgrades não contém `linux-image*` nenhum. Logo:
 
 ```bash
-sudo apt-mark hold linux-image-current-sunxi   # ajuste o nome real
-apt-mark showhold
+apt-mark showhold          # esperado: vazio
 ```
+
+`apt-mark hold` só seria necessário se algum dia um kernel do Debian for
+instalado. U-Boot também é binário do vendor, fora do apt — atualizar pacotes
+**não** troca o bootloader.
 
 ### Evitar atualização acidental do kernel
 

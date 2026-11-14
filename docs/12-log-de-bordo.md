@@ -1040,3 +1040,63 @@ ram: 77 MB usados de 491 MB
 **Zero unidades falhando** (antes o `systemd-binfmt` falhava em todo boot), sem
 bluetooth, sem getty em tty1, hora sincronizada sozinha e Wi-Fi de volta no mesmo
 IP. O sistema base está fechado.
+
+---
+
+## Sessão 13 — 2026-11-14 · atualização completa do sistema (163 pacotes)
+
+### Como foi feito
+
+Upgrade **destacado**, para o `apt` sobreviver a uma queda do SSH durante o
+restart do `systemd`/`network-manager`:
+
+```bash
+setsid nohup sh -c 'DEBIAN_FRONTEND=noninteractive apt-get -y \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+  full-upgrade' > /root/pre-upgrade/upgrade.log 2>&1 < /dev/null &
+```
+
+`--force-confold` é obrigatório aqui: sem ele o `dpkg` abre prompt de conffile e
+o upgrade fica parado segurando a sessão. Antes, foram guardados em
+`/root/pre-upgrade/`: lista de pacotes, o perfil `minha-rede.nmconnection` e o
+`sshd_config`.
+
+### Resultado
+
+```text
+EXIT=0
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+dpkg --audit: (vazio)
+
+libc6            2.36-9+deb12u3   -> 2.36-9+deb12u14
+systemd          252.19-1~deb12u1 -> 252.39-1~deb12u2
+openssh-server   9.2p1-2+deb12u1  -> 9.2p1-2+deb12u10
+network-manager  1.42.4-1         -> 1.42.4-1+deb12u1
+passwd           4.13+dfsg1-1+b1  -> 4.13+dfsg1-1+deb12u2
+kernel           4.14.111 (inalterado — não vem do apt)
+```
+
+### Validação pós-reboot
+
+```text
+host: ctl-nanopi  up 1 minute
+systemd 252 (252.39-1~deb12u2)
+unidades falhando: 0
+wifi: minha-rede  -31 dBm  power save off   ip 192.168.1.50
+portas: 22/tcp · 123/udp
+ram: 76/491 MB
+ntp: sincronizado (sync=yes após ~1 min de boot)
+pendentes: 0
+```
+
+Nenhum conffile foi sobrescrito — o perfil do NetworkManager e o `sshd_config`
+continuam idênticos aos do backup. O `iptables`-free, `nftables`-free estado de
+portas se manteve (só 22 e 123).
+
+### Achado 29 — reboot e `sync=no` por ~1 minuto é normal
+
+Logo após o boot, `timedatectl show -p NTPSynchronized` responde `no`: o `ntpsec`
+ainda está fazendo a primeira sincronização. Em ~40 s vira `yes`. **Não** é
+sintoma de problema; só vale checar se continuar `no` depois de alguns minutos,
+porque aí a causa é o RTC sem bateria (`RTC time: 2023-11-10`) somado a falta de
+rede — ver [troubleshooting](10-troubleshooting.md).
