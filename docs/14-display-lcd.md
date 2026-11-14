@@ -48,7 +48,7 @@ os equivalentes estão na primeira coluna.
 | `CS` | `SCE`, `CE` | **24** | `SPI0_CS` | `PC3` = 67 |
 | `DC` | `D/C`, `A0` | **16** | `UART1_RTS` | `PG8` = 200 |
 | `RST` | `RES`, `RST` | **18** | `UART1_CTS` | `PG9` = 201 |
-| `LED` | `BL`, `LED+` | **7** | `GPIOG11` (via transistor) | `PG11` = 203 |
+| `LED` | `BL`, `LED+` | **1/17** via resistor | `SYS_3.3V` | — |
 
 ### Por que esses pinos e não os "óbvios"
 
@@ -73,7 +73,7 @@ os equivalentes estão na primeira coluna.
   4  5V   (não usar)
   5  I2C0_SCL
   6  GND  ───────────────────────────────  GND
-  7  PG11 ──[transistor]─────────────────  LED (backlight, opcional)
+  7  PG11 (livre — dimmer futuro)
   8  UART1_TX (livre)
   9  GND
  10  UART1_RX (livre)
@@ -91,10 +91,18 @@ os equivalentes estão na primeira coluna.
  22  UART2_RX ← ocupado pela serial
  23  PC2  ───────────────────────────────  SCLK
  24  PC3  ───────────────────────────────  CS
+
+ extra: LED do módulo ──[ R = 100 Ω ]── pino 1 ou 17 (o mesmo 3,3 V do VCC)
 ```
 
-O módulo é **write-only**: o pino `MISO` (pino 21) fica sem ligação. Aproveite
-para deixá-lo fora do conector — 7 fios bastam (8 se usar o backlight em GPIO).
+O `LED` do backlight não vai para GPIO nenhum neste projeto: ele sai do mesmo
+`SYS_3.3V` do `VCC`, passando por um resistor (ver "Cuidados elétricos"). Isso
+deixa o `PG11` (pino 7) livre para um dimmer com transistor mais tarde, sem
+remexer na fiação.
+
+O módulo é **write-only**: o pino `MISO` (pino 21) fica sem ligação. São 7 fios
+até o header (`VCC`, `GND`, `SCLK`, `DIN`, `CS`, `DC`, `RST`) mais o `LED`, que
+se deriva do próprio `VCC` pelo resistor.
 
 ## A armadilha do CS (leia antes de soldar)
 
@@ -129,10 +137,22 @@ O script de teste aceita as duas (`--cs 67` ou `--cs-gnd`).
 | --- | --- |
 | Alimentação | `VCC` **só** em `SYS_3.3V` (pino 1 ou 17). 5 V queima o módulo nu |
 | Módulo com level shifter | alguns breakouts têm shifted logic e pedem 5 V no `VCC`; nesse caso os sinais continuam 3,3 V — **confira a serigrafia antes** |
-| Backlight | o `LED` vai ao 3,3 V **por resistor** (220–330 Ω) ou por transistor; não ligue direto num GPIO (limite ~20 mA/pino no H3) |
+| Backlight | o `LED` vai ao 3,3 V **por resistor**. Não ligue direto num GPIO (limite ~20 mA/pino no H3) |
 | Corrente total | lógica ~10 mA + backlight ~15 mA: folgado no regulador da placa |
 | Velocidade SPI | o `spidev0.0` está configurado para 10 MHz; o **PCD8544 aceita no máximo 4 MHz** — o driver deve pedir 1–4 MHz na transferência |
 | Fios | até ~30 cm sem problema nessa velocidade; mantenha longe da antena do AP6212 e confira o RSSI depois de montar |
+
+### Dimensionar o resistor do backlight
+
+O backlight desses módulos são LEDs brancos cuja tensão direta fica muito perto
+de 3,3 V — por isso "330 Ω" (receita comum na internet) deixa a tela quase
+apagada: sobra pouca tensão para o resistor limitar. O caminho prático:
+
+1. comece com **100 Ω** em série e meça a corrente com o multímetro;
+2. se estiver apagado, desça para **47 Ω** ou **33 Ω**;
+3. mire em **10–25 mA** no total — acima de 30 mA esquenta e não melhora a leitura;
+4. vários breakouts já têm resistor embutido na placa; nesse caso o `LED` pode ir
+   direto ao 3,3 V (confira a presença do componente perto do pino `LED`).
 
 Sequência de conferência com multímetro, **antes** de energizar:
 
@@ -200,8 +220,8 @@ e o renderizador descritos em [B-001](13-backlog.md#b-001--display-lcd-nokia-511
 
 ## Pendências desta etapa
 
-- [ ] confirmar a variante do breakout (3,3 V puro ou com level shifter/5 V)
-- [ ] decidir CS por software (pino 24) ou aterrado
-- [ ] decidir backlight fixo ou com transistor em `PG11`
+- [x] ~~confirmar a variante do breakout~~ — **3,3 V puro**, sem level shifter
+- [x] ~~decidir backlight~~ — fixo em 3,3 V por resistor; `PG11` fica para um dimmer futuro
+- [ ] decidir CS por software (pino 24) ou aterrado — o padrão documentado é software
 - [ ] rodar o teste de fumaça e registrar o resultado no log de bordo
 - [ ] medir o RSSI do Wi-Fi depois de montar o display
