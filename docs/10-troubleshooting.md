@@ -157,6 +157,55 @@ sudo iw dev wlan0 scan | grep SSID
 - a rede é 5 GHz? O AP6212 é **somente 2.4 GHz**.
 - SSID oculto? conecte com `hidden yes`.
 
+### `wlan0` existe, mas `Failed to initiate sched scan` em loop
+
+Este é o sintoma que mais engana: a interface sobe, o `dhclient` roda e não há
+`Trying to associate`. Nenhuma varredura devolve resultado, então nada de
+senha/SSID tem chance de estar errado — o rádio não sintoniza.
+
+Causa mais comum nesta placa: **NVRAM errado** em
+`/lib/firmware/brcm/brcmfmac43430-sdio.txt`. O firmware `.bin` é genérico, o
+`.txt` não é. Se ele veio do `linux-firmware` (Raspberry Pi/AW-NB197SM), os
+parâmetros não servem para o AP6212:
+
+| Parâmetro | RPi (errado) | AP6212 (correto) |
+| --- | --- | --- |
+| `xtalfreq` | 37400 | **26000** |
+| `boardrev` | 0x1202 | 0x1101 |
+| `pa2ga0` | `0xff65,0x195a,0xfd03` | `-168,7161,-820` |
+| `maxp2ga0` | 84 | 90 |
+| `papdmode` | 1 | 2 |
+
+Confira qual está instalado:
+
+```bash
+head -1 /lib/firmware/brcm/brcmfmac43430-sdio.txt
+grep -E '^(xtalfreq|boardrev)=' /lib/firmware/brcm/brcmfmac43430-sdio.txt
+```
+
+Se a primeira linha não for `#AP6212_NVRAM...`, troque — o arquivo correto está
+em `firmware/` neste repositório (ver [firmware/README.md](../firmware/README.md)):
+
+```bash
+sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" ./firmware
+```
+
+Complemento útil no `wpa_supplicant.conf` (já aplicado pelo script): forçar
+varredura normal em vez de varredura agendada.
+
+```conf
+disable_scan_offload=1
+ap_scan=1
+```
+
+Diagnóstico sem serial: instale a sonda no cartão e leia o resultado no PC.
+
+```bash
+sudo ./scripts/install-probe.sh /dev/sdX     # roda 45 s após o boot da placa
+sudo ./scripts/diag-wifi-card.sh /dev/sdX    # imprime /root/board-probe.txt
+```
+
+
 ### Conecta mas cai a cada poucos minutos
 
 Power-save do Wi-Fi:

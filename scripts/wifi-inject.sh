@@ -51,12 +51,24 @@ mkdir -p "$FWDEST"
 
 need_fw=0
 for f in brcmfmac43430-sdio.bin brcmfmac43430-sdio.txt; do
-  if [[ -f $FWDEST/$f ]]; then
-    info "firmware já presente: $f"
+  # Com FWDIR informado, ele é autoritativo: sobrescreve (com .bak). É assim que
+  # se troca um NVRAM errado — o "já presente" do cartão pode ser justamente o
+  # problema (ver firmware/README.md).
+  if [[ -n $FWDIR && -f $FWDIR/$f ]]; then
+    if [[ -f $FWDEST/$f ]] && cmp -s "$FWDIR/$f" "$FWDEST/$f"; then
+      info "firmware idêntico ao do cartão: $f"
+    else
+      [[ -f $FWDEST/$f ]] && cp -a "$FWDEST/$f" "$FWDEST/$f.bak"
+      install -m 0644 "$FWDIR/$f" "$FWDEST/$f"
+      if [[ -f $FWDEST/$f.bak ]]; then
+        info "firmware SUBSTITUÍDO (original em $f.bak): $f"
+      else
+        info "firmware copiado de $FWDIR: $f"
+      fi
+    fi
 
-  elif [[ -n $FWDIR && -f $FWDIR/$f ]]; then
-    install -m 0644 "$FWDIR/$f" "$FWDEST/$f"
-    info "firmware copiado de $FWDIR: $f"
+  elif [[ -f $FWDEST/$f ]]; then
+    info "firmware já presente: $f"
 
   elif [[ -f $FWDEST/brcmfmac43430-sdio.bin.zst || -f $FWDEST/brcmfmac43430-sdio.bin.xz ]]; then
     info "firmware comprimido presente (o kernel descomprime sozinho)"
@@ -66,6 +78,16 @@ for f in brcmfmac43430-sdio.bin brcmfmac43430-sdio.txt; do
     need_fw=1
   fi
 done
+
+# o NVRAM precisa ser o do AP6212; avisa se for o genérico do linux-firmware
+if [[ -f $FWDEST/brcmfmac43430-sdio.txt ]]; then
+  if grep -q 'AP6212_NVRAM' "$FWDEST/brcmfmac43430-sdio.txt"; then
+    info "NVRAM: AP6212 (correto para esta placa)"
+  else
+    warn "NVRAM NÃO é o do AP6212 — xtalfreq provavelmente errado, o rádio não varre"
+    warn "Use: sudo $0 $DEV \"SSID\" \"SENHA\" ./firmware"
+  fi
+fi
 
 # variações que alguns kernels procuram
 for f in brcmfmac43430-sdio.clm_blob brcmfmac43430-sdio.AP6212.txt; do
@@ -84,6 +106,11 @@ cat > "$CONF" <<EOF
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 country=BR
+
+# Varredura normal em vez de sched scan: o brcmfmac desta placa responde
+# "Failed to initiate sched scan" em loop e nunca devolve resultados.
+disable_scan_offload=1
+ap_scan=1
 
 network={
     ssid="$SSID"

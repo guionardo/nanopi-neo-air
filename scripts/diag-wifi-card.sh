@@ -67,3 +67,10 @@ fi
 sec "últimas tarefas do ifupdown"
 try ls -l "$R/run/network/" 2>/dev/null
 try cat "$R/run/network/ifstate" 2>/dev/null
+
+sec "SONDA DA PLACA (/root/board-probe.txt)"
+if [[ -f $R/root/board-probe.txt ]]; then
+  try cat "$R/root/board-probe.txt"
+else
+  printf '  (sonda não rodou — instale com scripts/install-probe.sh)\n'
+fi

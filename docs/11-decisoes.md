@@ -120,6 +120,30 @@ persistindo, refazer o eflasher com imagem oficial.
 - evidências e comandos ficam em [12-log-de-bordo.md](12-log-de-bordo.md);
 - nenhuma credencial do sistema atual é conhecida — não há como assumir `pi`/`pi`.
 
+### D-006 — Wi-Fi: firmware e NVRAM versionados no repositório, com procedência
+
+**Data:** 2026-11-14
+**Status:** aceita
+
+**Contexto:** o `brcmfmac` precisa de dois arquivos. O `.bin` é firmware genérico
+do chip BCM43430 (serve de qualquer origem). O `.txt` é o **NVRAM**, com a
+calibração de rádio do **módulo** — e usar o NVRAM de outro módulo BCM43430 faz
+o rádio inicializar e não varrer nada (`Failed to initiate sched scan` em loop,
+nenhum `Trying to associate`).
+
+**Decisão:** manter `firmware/brcmfmac43430-sdio.{bin,txt}` no git, com
+`firmware/README.md` explicando a origem, e um script reprodutível de extração
+([`scripts/extract-firmware.sh`](../scripts/extract-firmware.sh)) a partir da
+imagem oficial da FriendlyElec, que é git-ignored por tamanho.
+
+**Consequências:**
+
+- instalar/atualizar Wi-Fi passa a ser `wifi-inject.sh ... ./firmware`, que
+  **sobrescreve** o que houver (guardando `.bak`);
+- o repositório deixa de depender de "lembrar de onde veio o arquivo";
+- arquivos binários pequenos e insubstituíveis ficam versionados — 400 KB é
+  aceitável para remover uma classe inteira de erro silencioso.
+
 ## Pendências
 
 O que ainda precisa de decisão. Atualizar conforme for resolvendo.

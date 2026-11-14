@@ -665,3 +665,110 @@ O PL2303 reenumerou (`067b:2303`). Sintomas e o que significam:
 Pinagem do header UART0 (confirmada em [00](00-hardware.md)): **1 GND, 2 VDD_5V
 (nunca conectar), 3 UART_TXD0 → RX do adaptador, 4 UART_RXD0 ← TX do adaptador**.
 O TX fica **do lado do 5 V**, não do GND — é o erro de ligação mais provável.
+
+---
+
+## Sessão 9 — 2026-11-14 · a causa do Wi-Fi: NVRAM do módulo errado
+
+### O que a sonda do cartão mostrou
+
+O diagnóstico offline do rootfs do cartão (`scripts/diag-wifi-card.sh`) provou
+que o problema não era firmware ausente nem `rfkill`:
+
+```text
+brcmfmac ... using brcm/brcmfmac43430-sdio for chip BCM43430/1   (sem erro depois)
+wlan0: Failed to initiate sched scan                             (em loop, a cada ~6 s)
+DHCPDISCOVER on wlan0 ... interval 7..18                          (dhclient com a interface up)
+No DHCPOFFERS received.
+```
+
+Ou seja: `wlan0` **existe**, o módulo carrega, o `dhclient` roda — mas **nenhum
+`Trying to associate` aparece**. O `wpa_supplicant` nunca recebe um único
+resultado de varredura. A varredura falha, não a associação.
+
+### A causa: NVRAM de outro módulo BCM43430
+
+O firmware do `brcmfmac` é genérico (mesmo chip), mas o arquivo
+`brcmfmac43430-sdio.txt` é o **NVRAM** — e ele contém a calibração de rádio
+daquele módulo específico. O que foi injetado na sessão 8 veio do
+`linux-firmware` (RPi/AW-NB197SM):
+
+```text
+# NVRAM file for BCM943430WLSELG
+xtalfreq=37400
+boardrev=0x1202
+pa2ga0=0xff65,0x195a,0xfd03
+```
+
+O NVRAM correto do AP6212 estava dentro da própria imagem FriendlyElec:
+
+```text
+#AP6212_NVRAM_V1.0.1_20160606
+xtalfreq=26000
+boardrev=0x1101
+pa2ga0=-168,7161,-820
+```
+
+| Parâmetro | Errado (RPi) | AP6212 | Efeito |
+| --- | --- | --- | --- |
+| `xtalfreq` | 37400 | **26000** | referência do sintetizador errada: o rádio não sintoniza canal |
+| `boardrev` | 0x1202 | 0x1101 | layout de PA diferente |
+| `pa2ga0` | `0xff65,0x195a,0xfd03` | `-168,7161,-820` | curva de potência errada |
+| `maxp2ga0` | 84 | 90 | teto de potência errado |
+| `papdmode` | 1 | 2 | correção de potência em modo diferente |
+
+`xtalfreq` é a explicação mais direta do quadro: o chip inicializa no SDIO
+(por isso não há `Direct firmware load ... failed`), mas o sintetizador fica
+referenciado em 37,4 MHz quando o cristal da placa é de 26 MHz — o rádio não
+completa varredura e o driver devolve erro para todo `sched scan`.
+
+### Como o NVRAM foi extraído
+
+A imagem `h3-sd-ubuntu-noble-core-4.14-armhf-20260330.img.gz` tem 7,8 GB
+descompactada e o `.txt` é um arquivo de 1 KB dentro do ext4. Em vez de
+descompactar tudo, o script varre o `zcat` e extrai só a janela em volta do
+marcador `#AP6212_NVRAM`:
+
+```bash
+./scripts/extract-firmware.sh images/h3-sd-ubuntu-noble-core-4.14-armhf-20260330.img.gz
+```
+
+Resultado versionado em [`firmware/`](../firmware/README.md):
+`brcmfmac43430-sdio.txt` (AP6212) + `brcmfmac43430-sdio.bin` (linux-firmware).
+
+### Correções aplicadas de uma vez
+
+1. `wifi-inject.sh` passou a **sobrescrever** o firmware quando recebe a pasta
+   (antes pulava com "já presente" — justamente o arquivo errado).
+2. `wpa_supplicant.conf` recebeu `disable_scan_offload=1` e `ap_scan=1`:
+   varredura normal em vez de `sched scan`, eliminando a mensagem de erro
+   mesmo se o driver continuar implicando.
+3. Nova sonda [`scripts/board-probe.sh`](../scripts/board-probe.sh), instalada
+   por [`scripts/install-probe.sh`](../scripts/install-probe.sh): roda sozinha
+   45 s depois do boot e grava `wlan0`, `rfkill`, `dmesg`, `wpa_cli scan_results`
+   e o hash do NVRAM em `/root/board-probe.txt`. Com isso o cartão vira o canal
+   de diagnóstico, sem serial.
+
+### Achado 22 — o adaptador PL2303 está funcionalmente morto para isto
+
+Resumo do que ficou provado na caça à serial:
+
+| Teste | Resultado | Conclusão |
+| --- | --- | --- |
+| loopback (TX↔RX do adaptador) | texto volta idêntico | o chip transmite e recebe |
+| RX solto | fluxo contínuo de `0x00` (~280 kB/s) | entrada flutuando / break |
+| TX↔RX no header da placa | anel de `LOOPBACK-...` (126 MB) | curto ou mesma porta |
+| após reenumerar para `ttyUSB1` | 4.038 bytes, 100% NUL | receptor travado |
+
+O adaptador já caiu do barramento e reenumerou duas vezes. Enquanto não houver
+um segundo adaptador (ou fiação com GND firme e pinos distintos), **a serial
+não é canal** — e o cartão SD resolve o mesmo problema.
+
+### Estado ao fim da sessão
+
+| Item | Estado |
+| --- | --- |
+| eMMC gravada e bootando | ✅ |
+| NVRAM correto identificado e versionado | ✅ |
+| Wi-Fi com IP | ⏳ a validar no próximo boot |
+| Sonda de diagnóstico instalada no cartão | ✅ |

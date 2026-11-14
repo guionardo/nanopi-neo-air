@@ -41,9 +41,9 @@ Ordem sugerida de leitura = ordem numérica.
 
 ### Fase 2 — Sistema no eMMC
 
-- [ ] Imagem `eflasher` gravada no SD
-- [ ] `eflasher` executado e concluído sem erro
-- [ ] Boot a partir do eMMC sem cartão
+- [x] Imagem `eflasher` gravada no SD
+- [x] `eflasher` executado e concluído sem erro (`FLASH_DONE verify=ok`, 2min39s)
+- [x] Boot a partir do eMMC sem cartão (LED verde piscando)
 - [ ] `df -h` confirmando expansão do rootfs
 
 ### Fase 3 — Configuração de produção
