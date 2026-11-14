@@ -205,6 +205,42 @@ sudo ./scripts/install-probe.sh /dev/sdX     # roda 45 s após o boot da placa
 sudo ./scripts/diag-wifi-card.sh /dev/sdX    # imprime /root/board-probe.txt
 ```
 
+### Varre a rede, vê o SSID, mas nunca associa
+
+Se o `scan_results` lista a sua rede e o `wpa_state` fica em `SCANNING` para
+sempre, o suspeito número 1 é **grafia do SSID**: SSID diferencia maiúsculas de
+minúsculas. `Minha-rede` ≠ `minha-rede`.
+
+```bash
+wpa_cli -i wlan0 scan_results | awk -F'\t' '{print $NF}' | sort -u
+```
+
+Compare caractere por caractere com o `ssid=` do
+`/etc/wpa_supplicant/wpa_supplicant.conf`. Depois de corrigir:
+
+```bash
+sudo wpa_cli -i wlan0 reconfigure
+```
+
+Segundo suspeito: senha errada — mas aí aparece `4-Way Handshake failed` ou
+`pre-shared key may be incorrect` no `wpa_cli status`/log, não silêncio.
+
+### O MAC do Wi-Fi muda a cada boot
+
+Com o `macaddr` placeholder do NVRAM, o `brcmfmac` gera um MAC aleatório em todo
+boot — o lease do roteador muda e você perde o IP de vista. Fixe um MAC
+localmente administrado (primeiro octeto `02`, `06`, `0A` ou `0E`):
+
+```bash
+sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" ./firmware 02:00:00:00:00:01
+```
+
+Depois crie um lease estático no roteador para esse MAC. Confira na placa:
+
+```bash
+cat /sys/class/net/wlan0/address
+```
+
 
 ### Conecta mas cai a cada poucos minutos
 

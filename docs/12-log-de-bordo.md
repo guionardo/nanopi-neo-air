@@ -772,3 +772,73 @@ não é canal** — e o cartão SD resolve o mesmo problema.
 | NVRAM correto identificado e versionado | ✅ |
 | Wi-Fi com IP | ⏳ a validar no próximo boot |
 | Sonda de diagnóstico instalada no cartão | ✅ |
+
+---
+
+## Sessão 10 — 2026-11-14 · o rádio voltou; faltava a grafia do SSID
+
+### Resultado do NVRAM do AP6212: resolvido
+
+Mesmo boot, mesmo cartão, só o NVRAM trocado. A sonda mostrou o rádio vivo:
+
+```text
+brcmf_c_preinit_dcmds: Firmware: BCM43430/1 wl0: Oct 22 2019 01:59:28
+                       version 7.45.98.94 (r723000 CY) FWID 01-3b33decd
+wlan0  02:11:22:33:44:55  (UP, NO-CARRIER)
+scan_results:
+  aa:bb:cc:dd:ee:01  2432  -25  [WPA2-PSK+FT/PSK-CCMP]  minha-rede
+  aa:bb:cc:dd:ee:02  2432  -26  [WPA-PSK+TKIP][WPA2+CCMP+TKIP]  minha-rede-iot
+  aa:bb:cc:dd:ee:03  2422  -25  UNIFIQUE115
+  ...
+```
+
+Antes: zero resultados de varredura. Depois: 14 BSSIDs, o AP da casa a −25 dBm.
+`xtalfreq` era mesmo a diferença entre um rádio mudo e um rádio funcional.
+
+### Achado 23 — SSID diferencia maiúsculas de minúsculas
+
+O `wpa_supplicant.conf` dizia `ssid="Minha-rede"`; a rede é **`minha-rede`**
+(`U`, `R`, `L`, `A` maiúsculos). O `wpa_supplicant` varria, via a rede, não
+casava o SSID e voltava a varrer:
+
+```text
+wpa_state=SCANNING
+network id / ssid / bssid / flags
+0	Minha-rede	any
+```
+
+Isso explica o histórico inteiro: nunca houve `Trying to associate`, e o
+`dhclient` nunca recebeu oferta porque a interface **nunca associou** — não era
+DHCP, não era senha, não era `rfkill`.
+
+Consequência para a documentação: ao diagnosticar "não pega IP", a primeira
+coisa a comparar é a lista de `scan_results` com o `ssid=` do arquivo, caractere
+por caractere. Ver [10-troubleshooting.md](10-troubleshooting.md).
+
+### Achado 24 — o MAC é aleatório a cada boot
+
+O `macaddr` do NVRAM é o placeholder `00:90:4c:c5:12:38`; o `brcmfmac` detecta
+isso e gera um MAC aleatório. No boot medido: `02:11:22:33:44:55`. Para um
+headless isso é ruim: o lease muda e o IP "desaparece".
+
+Solução adotada: `wifi-inject.sh` aceita um MAC como 5º argumento e escreve em
+`macaddr=`/`il0macaddr=` do NVRAM. Usado `02:00:00:00:00:01` (localmente
+administrado, "nanop" em ASCII), para criar lease estático no MikroTik.
+
+### Como foi diagnosticado sem serial
+
+A sonda [`scripts/board-probe.sh`](../scripts/board-probe.sh) rodou sozinha no
+boot e gravou tudo em `/root/board-probe.txt`; o
+[`diag-wifi-card.sh`](../scripts/diag-wifi-card.sh) montou o cartão no PC e
+imprimiu o arquivo. **Zero serial, zero tentativa às cegas.** O ciclo completo é:
+cartão na placa → 3 min → cartão no PC → leitura. É o canal de diagnóstico
+oficial deste projeto a partir daqui.
+
+### Estado ao fim da sessão
+
+| Item | Estado |
+| --- | --- |
+| Firmware + NVRAM do AP6212 | ✅ rádio varrendo, 14 BSSIDs |
+| SSID correto (`minha-rede`) | ⏳ injeção pendente |
+| MAC fixo | ⏳ injeção pendente |
+| IP por DHCP / SSH | ⏳ depois do boot |

@@ -87,7 +87,7 @@ Preencher na primeira vez que a placa bootar.
 | Campo | Valor |
 | --- | --- |
 | Versão do hardware | a confirmar (LEDs: ver [00](00-hardware.md)) |
-| MAC Wi-Fi (`wlan0`) | a obter quando o boot estabilizar |
+| MAC Wi-Fi (`wlan0`) | `02:00:00:00:00:01` (fixado no NVRAM; antes era aleatório por boot) |
 | IP em produção | |
 | Hostname | `ctl-nanopi` (sugerido) |
 | Imagem gravada (nome do arquivo) | desconhecida — eMMC veio com sistema de origem não identificada |

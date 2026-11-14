@@ -8,7 +8,7 @@
 # Configurando o Wi-Fi no rootfs do cartão, você ganha SSH sem serial.
 #
 # Uso:
-#   sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" [pasta-de-firmware]
+#   sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" [pasta-de-firmware] [MAC]
 #
 # A pasta de firmware, se informada, deve conter brcmfmac43430-sdio.bin e
 # brcmfmac43430-sdio.txt (ex.: extraídos de outra imagem FriendlyElec).
@@ -21,9 +21,10 @@ info() { printf '==> %s\n' "$*"; }
 warn() { printf 'aviso: %s\n' "$*" >&2; }
 
 [[ $EUID -eq 0 ]] || die "execute como root (sudo)."
-[[ $# -ge 3 ]] || die "uso: $0 /dev/sdX \"SSID\" \"SENHA\" [pasta-de-firmware]"
+[[ $# -ge 3 ]] || die "uso: $0 /dev/sdX \"SSID\" \"SENHA\" [pasta-de-firmware] [MAC]"
 
 DEV=$1; SSID=$2; PSK=$3; FWDIR=${4:-}
+WIFI_MAC=${5:-${WIFI_MAC:-}}
 
 part_of() {
   local d=$1 n=$2
@@ -86,6 +87,21 @@ if [[ -f $FWDEST/brcmfmac43430-sdio.txt ]]; then
   else
     warn "NVRAM NÃO é o do AP6212 — xtalfreq provavelmente errado, o rádio não varre"
     warn "Use: sudo $0 $DEV \"SSID\" \"SENHA\" ./firmware"
+  fi
+fi
+
+# --- 1b. MAC fixo (opcional) ------------------------------------------------
+# Sem isso o brcmfmac gera um MAC aleatório a cada boot (o macaddr do NVRAM é
+# placeholder), e o lease no roteador muda de endereço. Com WIFI_MAC fixamos um
+# MAC localmente administrado (primeiro octeto 02/06/0A/0E).
+if [[ -n ${WIFI_MAC:-} ]]; then
+  if [[ $WIFI_MAC =~ ^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$ ]]; then
+    FWTXT=$FWDEST/brcmfmac43430-sdio.txt
+    [[ -f $FWTXT ]] || die "sem $FWTXT para fixar o MAC"
+    sed -i -E "s/^macaddr=.*/macaddr=$WIFI_MAC/; s/^il0macaddr=.*/il0macaddr=$WIFI_MAC/" "$FWTXT"
+    info "MAC fixado no NVRAM: $WIFI_MAC"
+  else
+    die "WIFI_MAC inválido: '$WIFI_MAC' (esperado aa:bb:cc:dd:ee:ff)"
   fi
 fi
 
@@ -167,6 +183,8 @@ else
 fi
 
 printf '\nCredenciais gravadas para SSID "%s".\n' "$SSID"
+printf 'SSID diferencia maiúsculas de minúsculas — se o scan mostrar outra grafia\n'
+printf '(ex.: minha-rede), o wpa_supplicant varre para sempre e nunca associa.\n'
 printf 'No boot: wlan0 pega IP por DHCP e o sshd escuta na porta 22.\n'
 printf 'Login: pi/fa (ou root/fa). Descubra o IP pelo seu roteador.\n'
 
