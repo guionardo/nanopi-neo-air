@@ -88,14 +88,14 @@ Preencher na primeira vez que a placa bootar.
 | --- | --- |
 | Versão do hardware | a confirmar (LEDs: ver [00](00-hardware.md)) |
 | MAC Wi-Fi (`wlan0`) | `02:00:00:00:00:01` (fixado no NVRAM; antes era aleatório por boot) |
-| IP em produção | |
-| Hostname | `ctl-nanopi` (sugerido) |
-| Imagem gravada (nome do arquivo) | desconhecida — eMMC veio com sistema de origem não identificada |
-| Data da instalação | anterior a 2026-11-13 |
+| IP em produção | `192.168.1.50` (DHCP; reservar lease de `02:00:00:00:00:01` no roteador) |
+| Hostname | `NanoPi-NEO-Air` (definido pelo `firstuse`; troca pendente) |
+| Imagem gravada (nome do arquivo) | `debian-bookworm-core` 20250402 (payload do eflasher, via `flash-emmc-headless.sh`) |
+| Data da instalação | 2026-11-13 (flash) · 2026-11-14 (provisão Wi-Fi) |
 | SHA-256 da imagem | |
 | Kernel instalado | 4.14.111 (armhf) |
 | U-Boot | 2017.11 (15/06/2021), board `nanopi-neo-air`, `cpu=h3` |
-| Userland na eMMC | Ubuntu 24.04 (systemd 255.4-1ubuntu8.2) |
+| Userland na eMMC | Debian 12 bookworm, NetworkManager, rootfs em overlayfs |
 | Local físico / responsável | |
 | Nº de série da etiqueta | |
 

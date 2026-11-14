@@ -26,6 +26,20 @@ Sintoma no log: `wpa_supplicant: wlan0: Failed to initiate sched scan` em loop,
 `No DHCPOFFERS received` e **nenhum** `Trying to associate` — ou seja, o scan
 nunca devolve nada.
 
+## Atenção: o vendor também distribui o NVRAM genérico
+
+O payload da eMMC da FriendlyElec traz os arquivos como symlinks:
+
+```text
+/lib/firmware/brcm/brcmfmac43430-sdio.txt -> /lib/firmware/ap6212/nvram_ap6212.txt
+```
+
+e esse `nvram_ap6212.txt` é o **mesmo genérico AW-NB197SM** (`pa2ga0`,
+`maxp2ga0` e `papdmode` de outro módulo). Por isso "usar o firmware do vendor"
+não é garantia: o que está versionado aqui é o arquivo que se provou funcional
+nesta placa (14 BSSIDs visíveis, AP a −25 dBm, associação e DHCP OK).
+
+
 ## Como re-extrair da imagem oficial
 
 A imagem `.img.gz` (7,8 GB descompactada) fica em `images/` e não vai para o

@@ -793,7 +793,7 @@ scan_results:
 ```
 
 Antes: zero resultados de varredura. Depois: 14 BSSIDs, o AP da casa a −25 dBm.
-`xtalfreq` era mesmo a diferença entre um rádio mudo e um rádio funcional.
+A troca do NVRAM (referência de cristal e calibração de PA) foi a diferença entre um rádio mudo e um rádio funcional. Nenhum outro parâmetro mudou nesse boot.
 
 ### Achado 23 — SSID diferencia maiúsculas de minúsculas
 
@@ -842,3 +842,111 @@ oficial deste projeto a partir daqui.
 | SSID correto (`minha-rede`) | ⏳ injeção pendente |
 | MAC fixo | ⏳ injeção pendente |
 | IP por DHCP / SSH | ⏳ depois do boot |
+
+---
+
+## Sessão 11 — 2026-11-14 · eMMC provisionada pela rede, sem cartão e sem serial
+
+### Como a eMMC foi configurada
+
+Com o cartão no ar (`192.168.1.53`, SSH `root`/`fa`), o rootfs da eMMC foi
+montado **pela rede** e configurado pelo script
+[`scripts/provision-emmc-wifi.sh`](../scripts/provision-emmc-wifi.sh):
+
+```text
+==> sistema atual: /dev/mmcblk0p3 · rootfs da eMMC: /dev/mmcblk1p2
+==> firmware instalado na eMMC: brcmfmac43430-sdio.bin / .txt
+==> NVRAM confirmado: AP6212
+==> perfil criado: /etc/NetworkManager/system-connections/minha-rede.nmconnection
+==> senha de 'root' sincronizada
+==> sshd habilitado no boot da eMMC
+```
+
+Nenhum ciclo de "tirar cartão, gravar, devolver" — a rede virou o canal de
+instalação.
+
+### Achado 25 — o payload da eMMC já tinha firmware, mas com o NVRAM genérico
+
+O sistema da eMMC traz os arquivos como **symlinks**:
+
+```text
+/lib/firmware/brcm/brcmfmac43430-sdio.bin -> /lib/firmware/ap6212/fw_bcm43438a1.bin
+/lib/firmware/brcm/brcmfmac43430-sdio.txt -> /lib/firmware/ap6212/nvram_ap6212.txt
+```
+
+O `nvram_ap6212.txt` do próprio vendor é o **mesmo genérico AW-NB197SM**
+(`pa2ga0=0xff65,0x195a,0xfd03`, `maxp2ga0=74`, `papdmode=1`) — a mesma família do
+arquivo do Raspberry Pi que deixou o rádio mudo. Os symlinks foram substituídos
+pelos arquivos do repositório (o NVRAM `#AP6212_NVRAM_V1.0.1_20160606` que
+provou funcionar). O `/lib/firmware/ap6212/` original ficou intacto.
+
+### Achado 26 — o driver ignora o `macaddr` do NVRAM
+
+Mesmo com `macaddr=02:00:00:00:00:01` no NVRAM, o `wlan0` subiu com
+`02:11:22:33:44:55`. O `brcmfmac` 4.14 valida o campo e prefere gerar o próprio
+endereço. Solução: fixar no NetworkManager, que troca o MAC antes de associar:
+
+```ini
+[wifi]
+cloned-mac-address=02:00:00:00:00:01
+```
+
+Resultado no roteador: lease com `02:00:00:00:00:01` em vez de um MAC novo a
+cada boot.
+
+### Achado 27 — `wifi.powersave` tem que ficar em `[wifi]`
+
+Na primeira versão o perfil tinha `wifi.powersave=2` na seção `[connection]`. O
+NM ignorou em silêncio e o rádio ficou em power-save: `iw dev wlan0 get power_save`
+respondia `on` e o ping média dava **60 ms**. Movendo para `[wifi]` como
+`powersave=2`:
+
+```text
+Power save: off
+64 bytes from 192.168.1.50: rtt min/avg/max/mdev = 7.6/19.6/44.8/12.8 ms
+```
+
+### Achado 28 — o root da eMMC é overlayfs
+
+`df -h /` na eMMC mostra `overlay 5.8G`; o `boot.cmd` explica:
+
+```text
+setenv overlayfs data=/dev/mmcblk0p3
+root=/dev/mmcblk0p2 rootfstype=ext4 ...
+```
+
+Ou seja: rootfs de 1,4 GB (p2) como camada inferior e a partição `userdata` de
+5,8 GB (p3) como camada superior gravável. Não é preciso montar `userdata` em
+lugar nenhum — ela **é** o espaço livre. `fsck`/backup, porém, têm que tratar as
+duas partições juntas.
+
+Detalhe de numeração: com o cartão presente a eMMC é `mmcblk1`; sem cartão ela
+vira `mmcblk0` — e é isso que o `boot.cmd` espera (`root=/dev/mmcblk0p2`).
+
+### Base configurada no sistema final
+
+| Item | Valor |
+| --- | --- |
+| Boot | eMMC, sem cartão, `mmcblk0p2` + overlay em `mmcblk0p3` |
+| Wi-Fi | NetworkManager, perfil `minha-rede`, `powersave=2`, MAC fixo |
+| IP | `192.168.1.50` por DHCP (reservar lease no MikroTik) |
+| SSH | `sshd` habilitado, chave do host instalada em `/root/.ssh` |
+| Timezone | `America/Sao_Paulo` |
+| NTP | `ntpsec` ativo (o relógio acertou sozinho após a rede subir) |
+| apt | `deb.debian.org` (o padrão era Aliyun, 1,4 s de latência) |
+| Extras | `iw` instalado; `ModemManager` desabilitado; `systemd-binfmt` mascarado |
+
+### Teste de persistência (reboot de verdade)
+
+```text
+$ ssh root@192.168.1.50 'systemctl reboot'
+... 2 min depois ...
+up 2 min,  load average: 0.48
+NanoPi-NEO-Air
+Connected to aa:bb:cc:dd:ee:01 (on wlan0)  SSID: minha-rede  freq: 2432
+wlan0:connected:minha-rede
+ping: rtt min/avg/max/mdev = 8.7/17.1/30.2/9.4 ms
+```
+
+Subiu sozinha, no mesmo IP, sem cartão e sem ninguém logado. **O sistema final
+está na eMMC e é autossuficiente.**

@@ -44,13 +44,13 @@ Ordem sugerida de leitura = ordem numérica.
 - [x] Imagem `eflasher` gravada no SD
 - [x] `eflasher` executado e concluído sem erro (`FLASH_DONE verify=ok`, 2min39s)
 - [x] Boot a partir do eMMC sem cartão (LED verde piscando)
-- [ ] `df -h` confirmando expansão do rootfs
+- [x] `df -h` confirmando espaço (root é overlay: 5,8 GB em `userdata`)
 
 ### Fase 3 — Configuração de produção
 
 - [ ] Hostname, timezone e locale definidos
 - [ ] Senhas trocadas; chave SSH instalada
-- [ ] Wi-Fi conectado com persistência após reboot
+- [x] Wi-Fi conectado com persistência após reboot (`minha-rede`, IP `192.168.1.50`)
 - [ ] `apt` atualizado; pacotes base instalados
 - [ ] Backup da imagem do eMMC arquivado
 - [ ] Papel do controlador definido (ver [11-decisoes.md](11-decisoes.md))
