@@ -929,7 +929,7 @@ vira `mmcblk0` — e é isso que o `boot.cmd` espera (`root=/dev/mmcblk0p2`).
 | --- | --- |
 | Boot | eMMC, sem cartão, `mmcblk0p2` + overlay em `mmcblk0p3` |
 | Wi-Fi | NetworkManager, perfil `minha-rede`, `powersave=2`, MAC fixo |
-| IP | `192.168.1.50` por DHCP (reservar lease no MikroTik) |
+| IP / hostname | `192.168.1.50` por DHCP (reservar lease no MikroTik) · `ctl-nanopi` |
 | SSH | `sshd` habilitado, chave do host instalada em `/root/.ssh` |
 | Timezone | `America/Sao_Paulo` |
 | NTP | `ntpsec` ativo (o relógio acertou sozinho após a rede subir) |
@@ -950,3 +950,14 @@ ping: rtt min/avg/max/mdev = 8.7/17.1/30.2/9.4 ms
 
 Subiu sozinha, no mesmo IP, sem cartão e sem ninguém logado. **O sistema final
 está na eMMC e é autossuficiente.**
+
+### Hostname definitivo
+
+`hostnamectl set-hostname ctl-nanopi` (e `127.0.1.1` em `/etc/hosts`). O
+`friendlyelec_firstuse.sh` não sobrescreve mais porque `/etc/firstuse` já existe.
+Escolha registrada em [11-decisoes.md](11-decisoes.md) — nome curto, alinhado ao
+papel de controlador.
+
+> Cuidado ao re-rodar `provision-emmc-wifi.sh`: ele **não** mexe mais em senhas
+> por padrão. Copiar o hash do cartão (`root`/`fa`) apagaria uma senha já trocada
+> na eMMC. Para instalação nova: `SYNC_PASS=1 ./provision-emmc-wifi.sh ...`.

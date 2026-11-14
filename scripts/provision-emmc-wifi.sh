@@ -103,14 +103,20 @@ EOF
 chmod 600 "$CONN"
 info "perfil criado: $CONN"
 
-# --- 3. senhas conhecidas (copia os hashes do sistema que está no ar) --------
-for u in root pi; do
-  h=$(grep "^$u:" /etc/shadow | cut -d: -f2 || true)
-  if [[ -n ${h:-} && -f $E/etc/shadow ]] && grep -q "^$u:" "$E/etc/shadow"; then
-    sed -i "s|^$u:[^:]*:|$u:$h:|" "$E/etc/shadow"
-    info "senha de '$u' sincronizada"
-  fi
-done
+# --- 3. senhas (opcional) ---------------------------------------------------
+# Por padrão NÃO mexe em senha: copiar o hash do sistema do cartão sobrescreveria
+# uma senha já trocada na eMMC. Use SYNC_PASS=1 só em instalação nova.
+if [[ ${SYNC_PASS:-0} == 1 ]]; then
+  for u in root pi; do
+    h=$(grep "^$u:" /etc/shadow | cut -d: -f2 || true)
+    if [[ -n ${h:-} && -f $E/etc/shadow ]] && grep -q "^$u:" "$E/etc/shadow"; then
+      sed -i "s|^$u:[^:]*:|$u:$h:|" "$E/etc/shadow"
+      info "senha de '$u' sincronizada do cartão"
+    fi
+  done
+else
+  info "senhas preservadas (use SYNC_PASS=1 para copiar do cartão)"
+fi
 
 # --- 4. ssh habilitado (a eMMC já traz; só garante) -------------------------
 mkdir -p "$E/etc/systemd/system/multi-user.target.wants"

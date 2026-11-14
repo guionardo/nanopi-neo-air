@@ -89,7 +89,7 @@ Preencher na primeira vez que a placa bootar.
 | Versão do hardware | a confirmar (LEDs: ver [00](00-hardware.md)) |
 | MAC Wi-Fi (`wlan0`) | `02:00:00:00:00:01` (fixado no NVRAM; antes era aleatório por boot) |
 | IP em produção | `192.168.1.50` (DHCP; reservar lease de `02:00:00:00:00:01` no roteador) |
-| Hostname | `NanoPi-NEO-Air` (definido pelo `firstuse`; troca pendente) |
+| Hostname | `ctl-nanopi` |
 | Imagem gravada (nome do arquivo) | `debian-bookworm-core` 20250402 (payload do eflasher, via `flash-emmc-headless.sh`) |
 | Data da instalação | 2026-11-13 (flash) · 2026-11-14 (provisão Wi-Fi) |
 | SHA-256 da imagem | |
