@@ -27,6 +27,19 @@
 - [Dimensões V1.1 (DXF, .rar)](https://wiki.friendlyelec.com/wiki/index.php/File:Dimensional-NanoPi_NEO_Air-V1.1-1708.rar)
 - [Case 3D V1.0 (Thingiverse)](https://www.thingiverse.com/thing:1998968)
 
+## Display LCD Nokia 5110 / PCD8544
+
+- [MakerHero — Conheça o Display Nokia 5110](https://www.makerhero.com/blog/conheca-o-display-nokia-5110/)
+  — tutorial em PT-BR (Arduino): pinagem, contraste, bitmap e fontes.
+  **Consultado em 14/11/2026.** Notas de adaptação em [14-display-lcd.md](14-display-lcd.md#notas-de-tutoriais-makerhero-20261114).
+- [Datasheet PCD8544](https://www.sparkfun.com/datasheets/LCD/Monochrome/Nokia5110.pdf)
+  — comandos, temporização (máx. 4 MHz) e mapa de endereços.
+- [Adafruit_PCD8544](https://github.com/adafruit/Adafruit-PCD8544-Nokia-5110-LCD-library)
+  — referência de sequência de inicialização e escala de contraste.
+- [luma.lcd](https://github.com/rm-hull/luma.lcd) — driver Python (Pillow) para Linux
+- [pcd8544designer](https://pcd8544designer.web.app/) — desenha telas 84x48 e
+  exporta o vetor MSB-first
+
 ## Repositórios
 
 - [friendlyarm/WiringNP](https://github.com/friendlyarm/WiringNP)

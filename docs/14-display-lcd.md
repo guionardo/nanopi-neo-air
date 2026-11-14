@@ -253,6 +253,45 @@ por quadro. Nenhum erro do controlador.
 Depois de validar, o próximo passo é o coletor de status (`/run/nanopi-status.json`)
 e o renderizador descritos em [B-001](13-backlog.md#b-001--display-lcd-nokia-5110-84x48).
 
+## Notas de tutoriais (MakerHero, 2026-11-14)
+
+O [tutorial da MakerHero](https://www.makerhero.com/blog/conheca-o-display-nokia-5110/)
+usa Arduino, mas três coisas dele são aproveitáveis aqui:
+
+**1. Os rótulos batem com o módulo desta bancada.** A tabela do tutorial é
+`RST, CE, DC, DIN, CLK, VCC, BL, GND` — mesma ordem física do nosso, com `BL` no
+lugar de `LIGHT`. Serve como confirmação externa da pinagem documentada acima.
+
+**2. Escala de contraste.** O tutorial usa `setContrast(56)` (biblioteca Adafruit,
+escala 0–100). Isso corresponde ao comando `Vop` do controlador:
+
+| Tutorial (Adafruit) | Nosso script (`--contrast`) | Resultado |
+| --- | --- | --- |
+| `setContrast(20)` | `--contrast 0x94` | claro, pixels fracos |
+| `setContrast(56)` | `--contrast 0xB8` | médio (padrão do tutorial) |
+| `setContrast(80)` | `--contrast 0xD0` | escuro |
+| — | `--contrast 0xFF` | máximo; pode borrar |
+
+O padrão do nosso script (`0xBF`) fica entre o "médio" e o "escuro".
+
+**3. Bitmap e fontes.** O caminho do tutorial (`drawBitmap`, `setTextSize`,
+`display()`) é o mesmo que o daemon vai precisar depois. Para desenhar telas de
+84x48 existe uma ferramenta web dedicada:
+[pcd8544designer.web.app](https://pcd8544designer.web.app/) — gera o vetor no
+formato MSB-first que o PCD8544 espera.
+
+### O que **não** copiar do tutorial
+
+- **"PCB azul aceita 3,3 V ou 5 V"**: o PCD8544 é um componente de 3,3 V. Se o
+  breakout não tiver um CI de *level shifter* (e a maioria dos azuis não tem),
+  os 5 V do Arduino entram direto nos pinos de lógica. Aqui isso não é risco —
+  a NanoPi só tem 3,3 V no header — mas não vale como regra geral.
+- **Backlight direto num GPIO** (`digitalWrite(BLpin, HIGH)`): o AVR do Arduino
+  aguenta mais corrente que o H3, e o tutorial não mostra resistor. Neste
+  projeto o backlight é resolvido pelo jumper do módulo.
+- O tutorial assume um único display com CE dedicado; no nosso caso o CE é
+  controlado por software porque o kernel não o aciona (seção acima).
+
 ## Pendências desta etapa
 
 - [x] ~~confirmar a variante do breakout~~ — **3,3 V puro**, sem level shifter
