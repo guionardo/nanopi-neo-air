@@ -11,11 +11,14 @@ processo possa ser repetido ou auditado depois.
 
 | Item | Situação |
 | --- | --- |
-| Hardware | Em mãos; **eMMC já contém um sistema não confiável** (loop de reset) |
-| SO alvo | FriendlyCore (Ubuntu Core) — kernel 4.14, armhf |
-| Console serial | Adaptador PL2303 em `/dev/ttyUSB0`, funcional |
+| Hardware | Em mãos; **eMMC com Debian 12 bootando sem cartão** |
+| SO | Debian 12 bookworm (payload `debian-bookworm-core`), kernel 4.14.111, armhf |
+| Acesso | **SSH por Wi-Fi** em `192.168.1.50` (`root`, chave do host instalada) |
+| Wi-Fi | `minha-rede`, AP6212, NVRAM do AP6212 versionado; MAC fixo `02:00:00:00:00:01` |
+| Root | overlayfs: `mmcblk0p2` (1,4 GB) + `userdata` (5,8 GB) |
+| Console serial | **Não confiável** (adaptador PL2303 instável); o cartão SD é o canal de recuperação |
 | Papel do controlador | **A definir** (ver [docs/11-decisoes.md](docs/11-decisoes.md)) |
-| Documentação | Em construção — ver [log de bordo](docs/12-log-de-bordo.md) |
+| Documentação | Completa; ideias futuras em [backlog](docs/13-backlog.md) |
 
 ## Por onde começar
 
@@ -36,17 +39,25 @@ Depois disso: [configuração base](docs/06-configuracao-base.md),
 
 ## Avisos rápidos
 
-- A NEO Air **não tem HDMI nem Ethernet**. O acesso de emergência é o
-  **console serial** (115200 8N1) — tenha um adaptador USB-TTL 3.3 V antes de começar.
+- A NEO Air **não tem HDMI nem Ethernet**. O acesso de emergência é o **cartão SD**
+  (o sistema do cartão sobe, monta a eMMC e permite consertá-la pela rede).
+  Console serial seria o caminho clássico, mas o adaptador PL2303 desta bancada é
+  instável — ver [log de bordo](docs/12-log-de-bordo.md).
 - Fonte **5 V / 2 A** no microUSB não é sugestão: subtensão causa boot instável
   e corrupção de sistema de arquivos.
-- eMMC virgem: a placa **só dá boot pelo microSD** até você rodar o `eflasher`.
+- O Wi-Fi só funciona com o **NVRAM do AP6212** (`firmware/`); o arquivo genérico
+  do `linux-firmware` deixa o rádio mudo. Ver [firmware/README.md](firmware/README.md).
 - Documentação oficial: <https://wiki.friendlyelec.com/wiki/index.php/NanoPi_NEO_Air>
 
 ## Estrutura do repositório
 
 ```
-README.md              visão geral e ponto de entrada
-docs/                  documentação do processo (índice em docs/README.md)
-scripts/flash-sd.sh    gravador de imagem para microSD (Linux, com validações)
+README.md                        visão geral e ponto de entrada
+docs/                            documentação do processo (índice em docs/README.md)
+firmware/                        firmware + NVRAM do AP6212 (obrigatório para o Wi-Fi)
+scripts/flash-sd.sh              gravador de imagem para microSD (Linux, com validações)
+scripts/flash-emmc-headless.sh   grava a eMMC a partir do próprio cartão (sem GUI)
+scripts/wifi-inject.sh           firmware + credenciais no rootfs do cartão
+scripts/provision-emmc-wifi.sh   configura o Wi-Fi da eMMC pela rede, a partir do cartão
+scripts/board-probe.sh           sonda de diagnóstico que roda no boot da placa
 ```

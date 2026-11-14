@@ -316,3 +316,7 @@ journalctl -u controlador.service -f
 ## Próximo passo
 
 [09 — Operação e manutenção](09-manutencao.md)
+
+> Ideia registrada para o futuro: display LCD Nokia 5110 (84x48, PCD8544) em SPI0
+> mostrando IP, sinal, temperatura e estado dos serviços — ver
+> [B-001 no backlog](13-backlog.md#b-001--display-lcd-nokia-5110-84x48).
