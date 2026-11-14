@@ -569,3 +569,99 @@ teste).
 - Documentado em [05](05-gravacao-emmc.md#alternativa-sem-display-e-sem-serial--auto-flash-headless).
 
 Nada foi executado ainda: exige o cartão no PC e uma senha de `sudo`.
+
+---
+
+## Sessão 7 — 2026-11-13 · o auto-flash funcionou, e a eMMC boota
+
+### Resultado
+
+O `flash-emmc.service` rodou no boot com o cartão e fez tudo:
+
+```text
+[14:32:15] destino: /dev/mmcblk1 (7456 MiB)
+[14:32:16] gravando U-Boot em offset 0x2000
+[14:32:16] gravando boot (FAT) em offset 24 MiB
+[14:32:23] rootfs: 31 chunks, 360448 blocos, offset 67108864
+...
+[14:34:46] rootfs: gravado
+[14:34:46] userdata: 8 chunks, 51200 blocos, offset 1543503872
+[14:34:49] userdata: gravado
+[14:34:53] p2 OK: superbloco ext4 valido e sem erros
+[14:34:54] FLASH_DONE verify=ok
+```
+
+| Etapa | Resultado |
+| --- | --- |
+| U-Boot em `0x2000` | ✅ |
+| p1 `boot.img` (FAT) | ✅ |
+| p2 `rootfs.img` (31 chunks) | ✅ 1.476.395.008 bytes |
+| p3 `userdata.img` (8 chunks) | ✅ 209.715.200 bytes |
+| `e2fsck -fn` na p2 | ✅ sem erros |
+| Tempo total | **2min39s** |
+
+Boot seguinte, **sem cartão**: LED verde piscando (heartbeat de userspace) e a
+placa desligada pelo próprio script no ciclo anterior. A eMMC inicia.
+
+### Achado 20 — "não rodou" era a placa não ter bootado
+
+Na primeira tentativa o cartão voltou com `ARMED` intacto e sem log, e o journal
+não tinha boot novo. Conclusão correta na época: o serviço não foi invocado. Mas
+a **causa** não era o systemd — era a placa não ter bootado mesmo (alimentação
+pelo carregador insuficiente / cartão mal encaixado). O sintoma foi o mesmo
+(vermelho aceso, verde apagado), o que engana.
+
+Lição para o futuro: **LED verde piscando é o único sinal confiável de boot**
+nesta placa sem console. Nunca interpretar `ARMED` intacto como bug do serviço
+antes de confirmar o LED.
+
+### Achado 21 — o decodificador acerta o número de chunks sozinho
+
+O cabeçalho Android sparse traz `total_chunks` (offset 20) e `total_blks`
+(offset 16). `blk_sz` fica no offset **12** — confundir os dois foi um bug real
+durante o desenvolvimento. Ver
+[`scripts/flash-emmc-headless.sh`](../scripts/flash-emmc-headless.sh).
+
+---
+
+## Sessão 8 — 2026-11-13/14 · caça ao canal de acesso
+
+### USB gadget: não é canal
+
+A imagem ativa `Hardware activated USB gadget` e sobe `sshd` em `0.0.0.0:22`, mas
+com a placa ligada pelo micro-USB no PC **nada enumera** (`lsusb` sem dispositivo
+novo, nenhum `/dev/ttyACM*`, nenhuma interface de rede). Testado com cabo de
+dados. Gadget descartado como caminho.
+
+### Wi-Fi: firmware faltando, agora injetado
+
+O journal da sessão 4 mostrava a causa:
+
+```text
+brcmfmac mmc2:0001:1: Direct firmware load for brcm/brcmfmac43430-sdio.bin failed with error -2
+brcmf_sdio_htclk: HT Avail timeout (1000000): clkctl 0x50
+```
+
+O rootfs do cartão (e o payload) não trazem o firmware do AP6212. Injetado com
+[`scripts/wifi-inject.sh`](../scripts/wifi-inject.sh) a partir do `linux-firmware`
+(RPi-Distro), NVRAM com `prodid=0x0726` (BCM43430). Configuração aplicada:
+`wpa_supplicant.conf` (600), bloco `wlan0` DHCP em `/etc/network/interfaces`,
+`wpa_supplicant.service` mascarado (brigava com o do ifupdown).
+
+A placa **não apareceu** na rede (varredura em `192.168.1.0/24` com
+[`scripts/find-board.sh`](../scripts/find-board.sh)): pendente de diagnóstico pelo
+console.
+
+### Serial: o adaptador voltou, e a fiação é o gargalo
+
+O PL2303 reenumerou (`067b:2303`). Sintomas e o que significam:
+
+| Sintoma | Causa |
+| --- | --- |
+| `0x00` contínuo a ~280 kB/s (59,6 MB em 200 s) | RX **flutuando** (fio fora do pino ou no pino errado) — o tty converte break em `0x00` |
+| padrão do loopback repetido milhões de vezes (126 MB) | **TX e RX em curto**: echo do tty em anel |
+| `serial-loopback.py` devolve o texto idêntico | adaptador **saudável** — o problema é só fiação |
+
+Pinagem do header UART0 (confirmada em [00](00-hardware.md)): **1 GND, 2 VDD_5V
+(nunca conectar), 3 UART_TXD0 → RX do adaptador, 4 UART_RXD0 ← TX do adaptador**.
+O TX fica **do lado do 5 V**, não do GND — é o erro de ligação mais provável.
