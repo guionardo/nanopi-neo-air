@@ -22,8 +22,9 @@ Convenção: `B-nnn` = ideia/funcionalidade. Decisões são `D-nnn`
 
 ### Objetivo
 
-Mostrar o estado da placa sem depender de rede: um display pequeno e barato,
-ligado no header GPIO1, exibindo as informações que hoje só existem via SSH.
+Como a placa é um host headless acessado só por SSH, o display mostra **o que
+você veria ao logar**: CPU, memória, uptime e IP. É um painel de bancada, não um
+console. Pequeno, barato, ligado no header GPIO1.
 
 ### Hardware
 
@@ -49,19 +50,38 @@ Cuidados:
   a serial de debug fica no header separado (UART0), então não há conflito;
 - a SPI0 do header é independente do barramento MMC da eMMC: não há disputa.
 
-### O que exibir (proposta)
+### O que exibir
 
-Como 84x48 dá ~6 linhas de 14 caracteres em fonte 5x7, o conteúdo precisa ser
-rotativo ou por "telas":
+Escopo definido pelo usuário em 2026-11-14: **CPU, memória, uptime e IP**. Uma
+tela só, sem botão e sem rotação — cabe nos 84x48:
 
-| Tela | Linha 1 | Linha 2 | Linha 3 | Linha 4 | Linha 5 | Linha 6 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Rede | `NanoPi` | `192.168.1.50` | `minha-rede -31dBm` | `up 3d 04h` | `ld 0.28` | `sshd ok` |
-| Saúde | `CPU 42C` | `freq 1200MHz` | `RAM 180/512M` | `disk 38%` | `swap 0M` | `fs ro? nao` |
-| Serviço | nome do serviço | estado | porta | última falha | `.` | `.` |
+```text
++----------------------+
+| ctl-nanopi           |  hostname
+| 192.168.1.50        |  IP (fonte maior: e o dado que se digita no SSH)
+| CPU  12%  .:-=+=-:.  |  uso + mini-grafico das ultimas ~20 amostras
+|  42C   1200MHz       |  temperatura e frequencia
+| MEM  180/512M        |  memoria usada/total
+| UP   3d 04h          |  uptime desde o boot
++----------------------+
+```
 
-Alternância automática a cada ~5 s com um botão (GPIO) para trocar de tela, ou
-`systemd` + um daemon pequeno.
+Detalhes de implementação do conteúdo:
+
+| Campo | Fonte | Observação |
+| --- | --- | --- |
+| IP | `nmcli -g IP4.ADDRESS dev show wlan0` ou `ip -4 -o addr` | se cair, mostrar `sem rede` em vez de IP velho |
+| CPU | delta de `/proc/stat` entre amostras | `/proc/loadavg` é média e engana em bursts |
+| Temperatura | `/sys/class/thermal/thermal_zone0/temp` | milésimos de °C |
+| Frequência | `/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq` | kHz |
+| Memória | `MemTotal - MemAvailable` de `/proc/meminfo` | 512 MB no total |
+| Uptime | `/proc/uptime` | formatar `Xd HHh` |
+
+- atualização a cada 2 s, redesenhando **só as linhas que mudaram** (evita
+  cintilação no PCD8544, que não tem buffer próprio de vídeo);
+- o mini-gráfico de CPU exige um ring buffer de ~20 amostras em memória;
+- opcional (barato): mostrar o **sinal Wi-Fi** em dBm na linha do IP — é o dado
+  que mais ajuda a diagnosticar a rede, e o custo é ler `/proc/net/wireless`.
 
 ### Caminhos de implementação
 
@@ -89,10 +109,11 @@ informação), e só migrar para **B** se o objetivo virar "console local" de fa
 
 - [ ] confirmar a **versão do módulo** (alguns breakouts têm regulador/level
       shifter de 5 V; nesse caso o `VCC` vai em 5 V, mas os sinais continuam 3,3 V)
-- [ ] decidir entre telas rotativas ou botão físico
+- [x] sem botão e sem telas rotativas (escopo: uma tela fixa)
 - [ ] medir o consumo do backlight e o impacto em temperatura
 - [ ] definir se o display é "enfeite" ou parte do diagnóstico (muda o
       investimento: fbtft + console local é bem mais trabalho)
 - [ ] escolher a fonte dos dados (arquivo de status vs. ler `/sys` direto)
+- [ ] decidir se o sinal Wi-Fi entra na tela (sugerido: sim)
 - [ ] validar que o `spidev0.0` funciona no kernel 4.14 da FriendlyElec
       (pode exigir habilitar o overlay de SPI no `uEnv.txt`/DTB)

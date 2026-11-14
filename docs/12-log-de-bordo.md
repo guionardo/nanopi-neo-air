@@ -961,3 +961,65 @@ papel de controlador.
 > Cuidado ao re-rodar `provision-emmc-wifi.sh`: ele **não** mexe mais em senhas
 > por padrão. Copiar o hash do cartão (`root`/`fa`) apagaria uma senha já trocada
 > na eMMC. Para instalação nova: `SYNC_PASS=1 ./provision-emmc-wifi.sh ...`.
+
+---
+
+## Sessão 12 — 2026-11-14 · papel definido e enxugamento do sistema
+
+### Papel: host headless via SSH (D-007)
+
+Definido pelo usuário: **máquina só com acesso via SSH**. Sem serviço exposto,
+sem GPIO em uso. As quatro propriedades que qualquer mudança futura deve
+preservar estão em [11-decisoes.md](11-decisoes.md) (D-007). Isso fecha a
+pendência **P-01**.
+
+O único periférico planejado é o display LCD Nokia 5110, e o conteúdo dele
+também foi definido: **CPU, memória, uptime e IP** — ver
+[B-001](13-backlog.md#b-001--display-lcd-nokia-5110-84x48).
+
+### Serviços removidos (tudo reversível)
+
+| Item | Ação | Por quê |
+| --- | --- | --- |
+| `ModemManager` | `disable --now` | não há modem; ele sonda portas seriais e atrapalha |
+| `systemd-binfmt` | `mask` | o kernel da FriendlyElec não tem `binfmt_misc` → falhava a cada boot |
+| `bluetooth` | `disable --now` | o AP6212 tem BT, mas nada usa; economiza RAM e um processo |
+| `getty@tty1` | `disable --now` + `mask` | não existe teclado/tela; o getty ficava gastando um processo |
+
+`serial-getty@ttyS0` foi **mantido**: custa praticamente nada e é o console de
+emergência se um dia o adaptador PL2303 se comportar.
+
+Sobre o `getty@tty1`: `disable --now` só removeu o symlink e o serviço continuou
+ativo — foi preciso `stop` + `mask`. Vale lembrar que `--now` em unit instanciada
+(`getty@tty1`) tem esse comportamento.
+
+### Auditoria de portas e memória
+
+```text
+$ ss -tuln
+tcp  0.0.0.0:22      tcp  [::]:22
+udp  0.0.0.0:123     udp  127.0.0.1:123     udp  192.168.1.50:123
+udp  [::1]:123       udp  [::]:123          udp  [fe80::...]%wlan0:123
+
+$ free -m
+              total  used  free  shared  buff/cache  available
+Mem:            491    84   190       1         232        406
+```
+
+Só SSH e NTP. Com 13 serviços rodando, a placa usa ~84 MB de 491 MB.
+
+> O `ntpd` escuta em `0.0.0.0:123`. Se um dia a placa sair da LAN, vale
+> restringir a `interface listen` no `ntp.conf` — hoje é aceitável.
+
+### Pendência aberta: 163 pacotes para atualizar
+
+```text
+163 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+libc6 2.36-9+deb12u3 -> +deb12u14 · systemd 252.19 -> 252.39
+openssh 9.2p1-2+deb12u1 -> +deb12u10 · network-manager 1.42.4-1 -> +deb12u1
+```
+
+**Não há `linux-image` nem U-Boot binário na lista** — o kernel da FriendlyElec
+vem fora do apt, então atualizar não mata o boot. Ainda assim, `systemd` e
+`network-manager` são justamente o que sustenta o acesso remoto: fazer com o
+cartão SD à mão, e só depois de senha forte definida.

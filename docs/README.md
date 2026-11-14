@@ -54,7 +54,7 @@ Ordem sugerida de leitura = ordem numérica.
 - [x] Wi-Fi conectado com persistência após reboot (`minha-rede`, IP `192.168.1.50`)
 - [ ] `apt` atualizado; pacotes base instalados
 - [ ] Backup da imagem do eMMC arquivado
-- [ ] Papel do controlador definido (ver [11-decisoes.md](11-decisoes.md))
+- [x] Papel do controlador definido: host headless via SSH (D-007)
 
 ## Convenções
 

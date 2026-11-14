@@ -144,13 +144,44 @@ imagem oficial da FriendlyElec, que é git-ignored por tamanho.
 - arquivos binários pequenos e insubstituíveis ficam versionados — 400 KB é
   aceitável para remover uma classe inteira de erro silencioso.
 
+### D-007 — Papel do controlador: host headless acessível por SSH
+
+**Data:** 2026-11-14
+**Status:** aceita — fecha a pendência P-01
+
+**Contexto:** a placa ficou operacional em 2026-11-14 (eMMC bootando sem cartão,
+Wi-Fi com NVRAM correto, SSH por chave, hostname `ctl-nanopi`). Não existe ainda
+uma aplicação definida: o uso imediato é ter uma máquina Linux sempre ligada na
+rede local, acessível por SSH.
+
+**Decisão:** o papel é **host Linux headless com acesso SSH na LAN**. Nada de
+serviço exposto para a internet, nada de GPIO em uso. Toda mudança futura deve
+preservar quatro propriedades:
+
+1. boot autônomo pela eMMC, sem cartão e sem console;
+2. reconexão automática do Wi-Fi (NetworkManager, perfil `minha-rede`);
+3. acesso por chave SSH (senha como alternativa local);
+4. recuperação pelo cartão SD (canal oficial de conserto).
+
+**Consequências:**
+
+- não é preciso decidir portas nem GPIOs agora — a [D-002](#d-002--sistema-no-emmc-não-no-cartão-sd)
+  já garante o armazenamento, e o resto fica disponível;
+- segurança passa a ser o eixo principal: atualizações, senha forte, chave SSH,
+  e **só a porta 22 aberta** (mais NTP/UDP 123);
+- P-03 (VPN) e P-08 (UPS) continuam abertas, mas agora são as únicas que mudam o
+  uso real de "máquina de bancada" para "máquina de produção";
+- o display LCD ([B-001](13-backlog.md#b-001--display-lcd-nokia-5110-84x48))
+  passa a ser o único periférico planejado, e o conteúdo dele já foi definido:
+  CPU, memória, uptime e IP.
+
 ## Pendências
 
 O que ainda precisa de decisão. Atualizar conforme for resolvendo.
 
 | # | Pendência | Impacto | Bloqueia? |
 | --- | --- | --- | --- |
-| P-01 | **Papel do controlador** (sensores, rede, mídia, servidor?) | define pacotes, portas, GPIOs, consumo | **sim** para a fase 3 |
+| P-01 | ~~Papel do controlador~~ — **resolvida em [D-007](#d-007--papel-do-controlador-host-headless-acessível-por-ssh)**: host headless via SSH | — | não |
 | P-02 | Definir o mapa de GPIOs da aplicação (quais pinos, com pull-up?) | evita conflito com funções de boot | não |
 | P-03 | Escolher método de acesso remoto (VPN? WireGuard? Tailscale?) | exposição na rede | não |
 | P-04 | Definir política de backup (rede vs USB; frequência) | recuperação após falha | não |
@@ -161,7 +192,8 @@ O que ainda precisa de decisão. Atualizar conforme for resolvendo.
 
 ### Perguntas abertas sobre a aplicação
 
-Estas respostas mudam o projeto — vale escrever antes de instalar qualquer coisa:
+Arquivadas pela [D-007](#d-007--papel-do-controlador-host-headless-acessível-por-ssh)
+(não há aplicação: o papel é host SSH). Ficam registradas para quando houver:
 
 1. O controlador precisa funcionar **offline**? (define dependência de NTP/DNS)
 2. Ele aciona cargas elétricas? Quantas, que tensão/corrente?
