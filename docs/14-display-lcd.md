@@ -55,7 +55,7 @@ aliases.
 | 4 | `DIN` | `MOSI`, `DN`, `SDA` | **19** | `PC0` = 64 | `SPI0_MOSI` |
 | 5 | `CLK` | `SCLK`, `SCK` | **23** | `PC2` = 66 | `SPI0_CLK` |
 | 6 | `VCC` | `VDD`, `3V3` | **1** (ou 17) | — | `SYS_3.3V` |
-| 7 | `LIGHT` | `LED`, `BL` | **1/17** via resistor | — | `SYS_3.3V` |
+| 7 | `LIGHT` | `LED`, `BL` | **jumper fechado** (sem fio) — ou 3,3 V via resistor | — | backlight |
 | 8 | `GND` | `GND` | **6** (ou 9, 14, 20) | — | `GND` |
 
 > A ordem física (RST primeiro, GND por último) é a mesma dos módulos
@@ -104,7 +104,8 @@ aliases.
  23  PC2  ───────────────────────────────  CLK   (pino 5)
  24  PC3  ───────────────────────────────  CE    (pino 2, CS)
 
- extra: LIGHT (pino 7) ──[ R = 100 Ω ]── pino 1 ou 17 (o mesmo 3,3 V do VCC)
+ extra: LIGHT (pino 7) → deixar sem fio se o jumper do backlight estiver fechado
+       (senão: LIGHT ──[ R = 100 Ω ]── pino 1 ou 17, o mesmo 3,3 V do VCC)
 ```
 
 O `LED` do backlight não vai para GPIO nenhum neste projeto: ele sai do mesmo
@@ -113,8 +114,8 @@ deixa o `PG11` (pino 7) livre para um dimmer com transistor mais tarde, sem
 remexer na fiação.
 
 O módulo é **write-only**: o pino `MISO` (pino 21) fica sem ligação. São 7 fios
-até o header (`VCC`, `GND`, `CLK`, `DIN`, `CE`, `DC`, `RST`) mais o `LIGHT`, que
-se deriva do próprio `VCC` pelo resistor.
+até o header (`VCC`, `GND`, `CLK`, `DIN`, `CE`, `DC`, `RST`); o `LIGHT` só entra
+se o jumper do backlight estiver aberto.
 
 ## A armadilha do CS (leia antes de soldar)
 
@@ -149,12 +150,30 @@ O script de teste aceita as duas (`--cs 67` ou `--cs-gnd`).
 | --- | --- |
 | Alimentação | `VCC` **só** em `SYS_3.3V` (pino 1 ou 17). 5 V queima o módulo nu |
 | Módulo com level shifter | alguns breakouts têm shifted logic e pedem 5 V no `VCC`; nesse caso os sinais continuam 3,3 V — **confira a serigrafia antes** |
-| Backlight | o `LED` vai ao 3,3 V **por resistor**. Não ligue direto num GPIO (limite ~20 mA/pino no H3) |
+| Backlight | feche o **jumper** do módulo primeiro; se ainda precisar de alimentação externa, use resistor (10–25 mA). Nunca ligue o backlight direto num GPIO (limite ~20 mA/pino no H3) |
 | Corrente total | lógica ~10 mA + backlight ~15 mA: folgado no regulador da placa |
 | Velocidade SPI | o `spidev0.0` está configurado para 10 MHz; o **PCD8544 aceita no máximo 4 MHz** — o driver deve pedir 1–4 MHz na transferência |
 | Fios | até ~30 cm sem problema nessa velocidade; mantenha longe da antena do AP6212 e confira o RSSI depois de montar |
 
-### Dimensionar o resistor do backlight
+### O jumper do backlight
+
+Este breakout tem um **jumper que vem aberto** e precisa ser fechado para o
+backlight funcionar (conforme a documentação do fabricante). Fechado, os LEDs já
+recebem alimentação pela placa — normalmente com resistor embutido — e o pino
+`LIGHT` (7) **não precisa de fio nenhum**.
+
+Como confirmar em 10 segundos, com o jumper fechado:
+
+1. ligue só `VCC` (pino 6) e `GND` (pino 8), **sem** nada no `LIGHT`;
+2. se o backlight acender, está resolvido: 7 fios, sem resistor externo;
+3. se continuar apagado, o jumper apenas leva o `LIGHT` ao ânodo e a alimentação
+   tem de vir de fora — aí siga a seção do resistor abaixo.
+
+Se o jumper for do tipo que **não** deve ser fechado com a placa energizada
+(alguns são solder jumpers), feche antes de ligar e confira com o multímetro se
+`LIGHT` tem continuidade com `VCC`.
+
+### Dimensionar o resistor do backlight (só se o jumper não bastar)
 
 O backlight desses módulos são LEDs brancos cuja tensão direta fica muito perto
 de 3,3 V — por isso "330 Ω" (receita comum na internet) deixa a tela quase
@@ -166,9 +185,9 @@ apagada: sobra pouca tensão para o resistor limitar. O caminho prático:
 4. vários breakouts já têm resistor embutido na placa; nesse caso o `LIGHT` pode
    ir direto ao 3,3 V (confira a presença do componente perto do pino `LIGHT`).
 
-> Atalho de montagem: `VCC` (pino 6) e `LIGHT` (pino 7) são vizinhos no módulo.
-> O resistor pode ser soldado **direto entre os dois pinos**, sem fio extra —
-> um jumper de 3,3 V alimenta os dois de uma vez.
+> Atalho de montagem (quando há resistor externo): `VCC` (pino 6) e `LIGHT`
+> (pino 7) são vizinhos no módulo. O resistor pode ser soldado **direto entre os
+> dois pinos**, sem fio extra — um único jumper de 3,3 V alimenta os dois.
 
 Sequência de conferência com multímetro, **antes** de energizar:
 
@@ -238,7 +257,8 @@ e o renderizador descritos em [B-001](13-backlog.md#b-001--display-lcd-nokia-511
 
 - [x] ~~confirmar a variante do breakout~~ — **3,3 V puro**, sem level shifter
 - [x] ~~registrar os rótulos do módulo~~ — `RST, CE, DC, DIN, CLK, VCC, LIGHT, GND`
-- [x] ~~decidir backlight~~ — fixo em 3,3 V por resistor; `PG11` fica para um dimmer futuro
+- [x] ~~decidir backlight~~ — fixo, ligado pelo **jumper do módulo**; `PG11` fica para um dimmer futuro
+- [ ] fechar o jumper do backlight e confirmar se o `LIGHT` pode ficar sem fio
 - [ ] decidir CS por software (pino 24) ou aterrado — o padrão documentado é software
 - [ ] rodar o teste de fumaça e registrar o resultado no log de bordo
 - [ ] medir o RSSI do Wi-Fi depois de montar o display

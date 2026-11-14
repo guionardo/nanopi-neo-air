@@ -40,7 +40,7 @@ monocromático, SPI write-only, alimentação e lógica em **3,3 V**.
 | 2 | `CE` (CS) | pino 24 (`SPI0_CS`, `PC3`) | o kernel **não** aciona este pino: CS por software |
 | 3 | `DC` | pino 16 (`UART1_RTS`, `PG8`) | |
 | 1 | `RST` | pino 18 (`UART1_CTS`, `PG9`) | |
-| 7 | `LIGHT` | 3,3 V por resistor (100 Ω → medir) | `PG11` livre para dimmer futuro |
+| 7 | `LIGHT` | fechar o jumper do módulo (vem aberto) | sem fio se o backlight acender; senão 3,3 V por resistor |
 
 Pinagem detalhada, cuidados elétricos e teste de fumaça:
 [14-display-lcd.md](14-display-lcd.md).
