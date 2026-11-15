@@ -73,6 +73,11 @@ sudo systemctl restart ssh
 **Mantenha o console serial conectado** até validar que a chave funciona. Se você
 se trancar fora, a serial é o resgate.
 
+Pelo [`install.sh`](15-instalador.md) isso já vem feito: o `net` copia a chave
+do cartão para a eMMC e grava
+`/etc/ssh/sshd_config.d/10-no-password.conf` (use `ALLOW_PASSWORD=1` para
+manter o login por senha).
+
 ## 5. Atualizar o sistema
 
 ```bash

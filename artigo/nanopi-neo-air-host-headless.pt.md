@@ -203,6 +203,12 @@ Copiar o hash de `/etc/shadow` do sistema do cartão é ótimo na instalação i
 e péssimo depois — apagaria silenciosamente uma senha já trocada na eMMC. Agora
 isso é opt-in (`SYNC_PASS=1`).
 
+O que ele faz, sim, é copiar a chave do cartão e desligar o login por senha
+(`sshd_config.d/10-no-password.conf`). A senha do payload é a `fa`, padrão do
+fabricante e pública: sem esse passo a placa subia acessível por chave **e**
+pela senha que todo mundo conhece. Na primeira rodada de verdade foi justamente
+o que faltou — a chave existia só no cartão, e a eMMC recusou o SSH.
+
 ## Enxugar o sistema
 
 Sistema que boota não é sistema pronto. Alguns ajustes que mudam o dia a dia:

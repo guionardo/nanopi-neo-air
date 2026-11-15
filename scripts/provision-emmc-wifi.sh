@@ -126,7 +126,7 @@ mkdir -p "$E/etc/systemd/system/multi-user.target.wants"
         "$E/etc/systemd/system/multi-user.target.wants/ssh.service"
 info "sshd habilitado no boot da eMMC"
 
-# --- 4a. chave SSH ----------------------------------------------------------
+# --- 4a. chave SSH e login por senha ---------------------------------------
 # O wifi-inject.sh escreveu a chave no cartão, mas a eMMC do payload não tem
 # nenhuma: sem isso o primeiro boot só aceita a senha padrão do fabricante
 # ("fa"). Copiar a chave do cartão mantém o acesso por chave desde o primeiro
@@ -135,8 +135,21 @@ if [[ -s /root/.ssh/authorized_keys ]]; then
   install -d -m 700 "$E/root/.ssh"
   install -m 600 /root/.ssh/authorized_keys "$E/root/.ssh/authorized_keys"
   info "chave SSH instalada na eMMC ($(wc -l < "$E/root/.ssh/authorized_keys") chave(s))"
+
+  # Host headless (D-007): a senha do payload é a padrão do fabricante, que é
+  # pública. Com a chave instalada, desligar o login por senha não tira o
+  # acesso — e a recuperação continua sendo o cartão SD.
+  if [[ ${ALLOW_PASSWORD:-0} == 1 ]]; then
+    info "login por senha mantido (ALLOW_PASSWORD=1)"
+  else
+    mkdir -p "$E/etc/ssh/sshd_config.d"
+    printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\n' \
+      > "$E/etc/ssh/sshd_config.d/10-no-password.conf"
+    info "login por senha desabilitado (ALLOW_PASSWORD=1 para manter)"
+  fi
 else
   printf 'aviso: sem /root/.ssh/authorized_keys no cartão — a eMMC só aceitará senha\n' >&2
+  printf 'aviso: login por senha foi mantido para não trancar o acesso\n' >&2
 fi
 
 # --- 4b. hostname (opcional) ------------------------------------------------

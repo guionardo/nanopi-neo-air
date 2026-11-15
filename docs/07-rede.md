@@ -106,8 +106,12 @@ sudo turn-wifi-into-apmode yes
 Resultado: a placa cria uma rede e fica em `192.168.8.1`.
 
 ```bash
-ssh root@192.168.8.1      # senha: fa (padrão)
+ssh root@192.168.8.1      # senha: fa (padrão do payload do fabricante)
 ```
+
+> Num sistema provisionado pelo `install.sh` o login por senha fica
+> desabilitado (só chave), então o `ssh` acima precisa da chave — o `fa` vale
+> para o payload cru ou com `ALLOW_PASSWORD=1`.
 
 Economia de energia no modo AP:
 

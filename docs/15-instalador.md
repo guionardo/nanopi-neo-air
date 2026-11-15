@@ -159,9 +159,9 @@ script faz por baixo.
 
 - não distribui a imagem (licença da FriendlyElec): informe `IMAGE`;
 - não suporta macOS nem Windows — usa `dd`, `mount` e utilitários GNU;
-- não troca senhas: o provisionamento **não** sincroniza `/etc/shadow` por
-  padrão (seria destrutivo numa placa já usada); use `SYNC_PASS=1` à mão em
-  instalação nova. A eMMC do payload mantém a senha padrão do fabricante
-  (`fa`) para o `root` — troque-a ou desabilite `PasswordAuthentication`
-  depois do primeiro acesso por chave;
+- não troca a senha do root: o provisionamento **não** sincroniza
+  `/etc/shadow` (seria destrutivo numa placa já usada). Em vez disso copia a
+  chave do cartão e desabilita o login por senha, porque a senha do payload é
+  a padrão do fabricante (`fa`, pública). Use `ALLOW_PASSWORD=1` para manter
+  o login por senha ou `SYNC_PASS=1` para copiar o hash do cartão;
 - não mexe no bootloader nem no kernel: eles vêm do payload do fabricante.
