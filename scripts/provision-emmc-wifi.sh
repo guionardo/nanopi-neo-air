@@ -15,9 +15,10 @@
 
 set -euo pipefail
 
-SSID=${1:?uso: $0 "SSID" "SENHA" [MAC]}
-PSK=${2:?uso: $0 "SSID" "SENHA" [MAC]}
+SSID=${1:?uso: $0 "SSID" "SENHA" [MAC] [HOSTNAME]}
+PSK=${2:?uso: $0 "SSID" "SENHA" [MAC] [HOSTNAME]}
 MAC=${3:-}
+NEW_HOST=${4:-}
 E=/mnt/emmc
 
 info() { printf '==> %s\n' "$*"; }
@@ -124,6 +125,23 @@ mkdir -p "$E/etc/systemd/system/multi-user.target.wants"
   || ln -sf /lib/systemd/system/ssh.service \
         "$E/etc/systemd/system/multi-user.target.wants/ssh.service"
 info "sshd habilitado no boot da eMMC"
+
+# --- 4b. hostname (opcional) ------------------------------------------------
+# Sem isso o primeiro boot roda o friendlyelec_firstuse.sh e o hostname vira o
+# nome padrão da placa. Criar /etc/firstuse marca "já configurado" e evita que
+# ele sobrescreva o nome escolhido.
+if [[ -n ${NEW_HOST:-} ]]; then
+  [[ $NEW_HOST =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] \
+    || die "hostname inválido: '$NEW_HOST'"
+  printf '%s\n' "$NEW_HOST" > "$E/etc/hostname"
+  if grep -q '^127\.0\.1\.1' "$E/etc/hosts"; then
+    sed -i "s|^127\.0\.1\.1.*|127.0.1.1\t$NEW_HOST|" "$E/etc/hosts"
+  else
+    printf '127.0.1.1\t%s\n' "$NEW_HOST" >> "$E/etc/hosts"
+  fi
+  printf '1\n' > "$E/etc/firstuse"
+  info "hostname definido na eMMC: $NEW_HOST"
+fi
 
 # --- 5. relatório ----------------------------------------------------------
 printf '\n'

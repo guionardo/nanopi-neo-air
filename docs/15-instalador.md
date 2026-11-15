@@ -1,0 +1,152 @@
+# 15 — Instalador de ponta a ponta (`install.sh`)
+
+Um comando para levar uma NanoPi NEO Air nova de "placa com eMMC
+desconhecida" até "host headless acessível por SSH", usando só um computador
+Linux com leitor de cartão SD. Sem monitor, sem teclado e sem adaptador serial
+na placa.
+
+O `install.sh` não substitui os documentos [03](03-gravacao-sd.md),
+[04](04-primeiro-boot.md), [05](05-gravacao-emmc.md) e [07](07-rede.md): ele
+executa o mesmo caminho, com as validações que a bancada mostrou serem
+necessárias.
+
+## O que é preciso
+
+| Item | Detalhe |
+| --- | --- |
+| Computador | Linux (x86_64 ou arm64), bash 4+ |
+| Ferramentas | `dd`, `mount`, `findmnt`, `lsblk`, `sha256sum`, `ssh`, `ssh-keygen` e `curl` ou `wget` |
+| Leitor de cartão | microSD de **8 GB ou mais** (o eflasher ocupa ~7 GB) |
+| Imagem | eflasher da FriendlyElec (`h3-eflasher-*.img.gz`) — **não** a imagem `sd` |
+| Placa | NanoPi NEO Air com eMMC; fonte 5 V/2 A |
+
+Se faltar alguma ferramenta do pacote base, o script tenta instalar via
+`apt`/`dnf`/`pacman`. Para não deixar o script mexer no sistema, use
+`--skip-deps` e instale à mão.
+
+> **Por que a imagem `eflasher` e não a `sd`?** É o eflasher que carrega o
+> payload da eMMC (`boot.img`, `rootfs.img` e `userdata.img` em
+> `/mnt/debian-bookworm-core`). O instalador arma um serviço que grava esse
+> payload sem GUI. A imagem `sd` sobe um sistema no cartão, mas não tem o que
+> gravar na eMMC.
+
+## Uso
+
+```bash
+./install.sh check            # ambiente, dependências, imagem e cartão
+./install.sh card             # grava o cartão e injeta a configuração
+./install.sh net              # encontra a placa, grava a eMMC e provisiona
+./install.sh verify           # confere o sistema que subiu da eMMC
+./install.sh all              # card + net (com pausa para trocar o cartão)
+```
+
+Opções:
+
+| Opção | Efeito |
+| --- | --- |
+| `--config ARQUIVO` | usa outro `install.conf` |
+| `--yes` | não pede confirmação (use com cuidado) |
+| `--skip-deps` | não tenta instalar dependências |
+| `--dry-run` | mostra o que faria, sem escrever no cartão |
+
+## Configuração
+
+Na primeira execução o script pergunta o que falta e grava `install.conf` com
+permissão `600`. O arquivo contém a senha do Wi-Fi e está no `.gitignore`.
+
+| Variável | Obrigatória | Descrição |
+| --- | --- | --- |
+| `SSID` | sim | nome da rede (diferencia maiúsculas de minúsculas) |
+| `PSK` | sim | senha WPA2 (8+ caracteres) |
+| `HOSTNAME_NEW` | não | hostname da placa (padrão `nanopi`) |
+| `IMAGE` | sim | caminho local ou URL da imagem eflasher |
+| `IMAGE_SHA256` | recomendado | checksum; sem ele o script avisa que não verificou |
+| `SD_DEV` | sim | disco inteiro do cartão (ex.: `/dev/sdb`) |
+| `WIFI_MAC` | não | MAC fixo (`02:xx:…`) para o roteador manter o lease |
+| `SSH_KEY` | não | chave privada usada no acesso (padrão `~/.ssh/id_ed25519`) |
+| `BOARD_IP` | não | pula a descoberta automática e usa este IP |
+
+Variáveis de ambiente com o mesmo nome também funcionam
+(`BOARD_IP=192.168.1.50 ./install.sh verify`).
+
+## Fases
+
+### `check`
+
+Não escreve nada. Confere dependências, resolve a imagem (baixa e valida o
+gzip/checksum), valida SSID/senha/hostname/MAC e inspeciona o cartão.
+
+### `card` (destrutivo)
+
+1. grava a imagem com [`scripts/flash-sd.sh`](../scripts/flash-sd.sh)
+   (`dd` + `sync` + verificação do ponto de montagem);
+2. roda [`scripts/wifi-inject.sh`](../scripts/wifi-inject.sh) para colocar no
+   rootfs do cartão o firmware + NVRAM do AP6212, o perfil do NetworkManager e a
+   chave SSH pública;
+3. roda [`scripts/install-headless-flash.sh`](../scripts/install-headless-flash.sh)
+   para armar a gravação da eMMC no primeiro boot.
+
+Depois disso: cartão na placa, ligar, esperar ~15 min. A placa grava a eMMC,
+verifica (`FLASH_DONE verify=ok`) e desliga sozinha.
+
+### `net`
+
+1. encontra a placa na LAN (varredura do `/24` da rota padrão, testando SSH);
+2. confirma que a eMMC está visível (`/dev/mmcblk*p2`);
+3. acompanha `/root/flash-emmc.log` até `FLASH_DONE verify=ok`;
+4. pede para você religar a placa **ainda com o cartão**;
+5. copia e roda [`scripts/provision-emmc-wifi.sh`](../scripts/provision-emmc-wifi.sh)
+   na placa, que monta a eMMC e escreve: firmware/NVRAM, perfil de Wi-Fi
+   (`powersave=2` em `[wifi]`, MAC fixo opcional), `sshd` habilitado e hostname;
+6. desliga a placa para você tirar o cartão.
+
+### `verify`
+
+Entra por SSH e confere: origem do root (`mmcblk0p2` = eMMC), hostname, uptime,
+associação Wi-Fi (SSID e sinal) e unidades systemd falhando. É leitura pura.
+
+## Segurança do dispositivo
+
+O script recusa:
+
+- disco que contém o sistema em execução (comparação por `PKNAME`);
+- disco com qualquer partição montada (lista os pontos de montagem);
+- dispositivo inexistente ou partição em vez do disco inteiro;
+- cartão com menos de 7.000 MiB.
+
+E, sem `--yes`, exige digitar o caminho do dispositivo (`/dev/sdb`) para
+confirmar a gravação. `--dry-run` mostra os três passos do `card` sem tocar no
+cartão.
+
+## Estado de validação
+
+| Fase | Situação |
+| --- | --- |
+| `check` | ✅ recusa disco raiz, disco com partição montada e device inexistente; valida gzip |
+| `verify` | ✅ executado contra a placa real (root overlay, Wi-Fi, 0 unidades falhando) |
+| `card` | 🟡 recusas de segurança testadas; gravação em cartão real pendente |
+| `net` | 🟡 descoberta e leitura do log implementadas; ciclo completo pendente |
+
+Enquanto `card`/`net` não forem exercitados de ponta a ponta, o caminho manual
+dos documentos 03–07 continua sendo a referência.
+
+## Diagnóstico
+
+| Sintoma | O que verificar |
+| --- | --- |
+| `SSID é obrigatório` | `install.conf` ausente ou sem `SSID`; rode `check` de novo |
+| `não é dispositivo de bloco` | confira `lsblk`; use o disco inteiro, não a partição |
+| `tem partições montadas` | `umount` das partições do cartão (o desktop pode montar sozinho) |
+| `não achei a placa` | a placa entrou na LAN? Use `BOARD_IP=…` ou `--dry-run` para conferir a config |
+| `tempo esgotado esperando a gravação` | veja `/root/flash-emmc.log` no cartão; `FLASH_FAILED` indica falha |
+| `root não está na eMMC` no `verify` | o cartão ainda está no lugar; remova e ligue de novo |
+| Wi-Fi não associa | SSID com maiúsculas diferentes, ou NVRAM errado (ver [10](10-troubleshooting.md)) |
+
+## O que o script não faz
+
+- não distribui a imagem (licença da FriendlyElec): informe `IMAGE`;
+- não suporta macOS nem Windows — usa `dd`, `mount` e utilitários GNU;
+- não troca senhas: o provisionamento **não** sincroniza `/etc/shadow` por
+  padrão (seria destrutivo numa placa já usada); use `SYNC_PASS=1` à mão em
+  instalação nova;
+- não mexe no bootloader nem no kernel: eles vêm do payload do fabricante.

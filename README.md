@@ -37,6 +37,28 @@ Depois disso: [configuração base](docs/06-configuracao-base.md),
 
 Índice completo em **[docs/README.md](docs/README.md)**.
 
+## Instalar em uma placa nova (do zero)
+
+Com um computador Linux e um leitor de cartão SD, o caminho inteiro — gravar o
+cartão, injetar Wi-Fi + firmware + chave SSH, gravar a eMMC e provisionar o
+sistema final — está em [`install.sh`](install.sh). Não precisa de monitor,
+teclado nem adaptador serial na placa.
+
+```bash
+git clone https://github.com/guionardo/nanopi-neo-air.git
+cd nanopi-neo-air
+./install.sh check   # confere ferramentas, imagem e cartão
+./install.sh card    # grava e prepara o cartão (destrutivo)
+./install.sh net     # espera a placa, grava a eMMC e provisiona
+./install.sh verify  # confere o sistema que subiu da eMMC
+```
+
+A primeira execução pergunta SSID, senha e hostname e grava tudo em
+`install.conf` (permissão `600`, fora do git). A imagem usada é a **eflasher**
+da FriendlyElec (`h3-eflasher-*`), que contém o payload da eMMC — o script não
+distribui a imagem por licença. Detalhes, fases e diagnóstico em
+[docs/15-instalador.md](docs/15-instalador.md).
+
 ## Avisos rápidos
 
 - A NEO Air **não tem HDMI nem Ethernet**. O acesso de emergência é o **cartão SD**
@@ -53,12 +75,14 @@ Depois disso: [configuração base](docs/06-configuracao-base.md),
 
 ```
 README.md                        visão geral e ponto de entrada
+install.sh                       instalador de ponta a ponta (check|card|net|verify|all)
 docs/                            documentação do processo (índice em docs/README.md)
-artigo/                          artigo de blog (Markdown + front matter) sobre o processo
+artigo/                          artigo de blog em Markdown, no formato do Astro
 firmware/                        firmware + NVRAM do AP6212 (obrigatório para o Wi-Fi)
 scripts/flash-sd.sh              gravador de imagem para microSD (Linux, com validações)
 scripts/flash-emmc-headless.sh   grava a eMMC a partir do próprio cartão (sem GUI)
-scripts/wifi-inject.sh           firmware + credenciais no rootfs do cartão
+scripts/install-headless-flash.sh arma a gravação da eMMC no cartão eflasher
+scripts/wifi-inject.sh           firmware + credenciais + chave SSH no rootfs do cartão
 scripts/provision-emmc-wifi.sh   configura o Wi-Fi da eMMC pela rede, a partir do cartão
 scripts/board-probe.sh           sonda de diagnóstico que roda no boot da placa
 scripts/pcd8544-smoke-test.py    teste de fumaça do display LCD Nokia 5110 (84x48)

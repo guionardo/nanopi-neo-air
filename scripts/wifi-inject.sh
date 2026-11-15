@@ -8,7 +8,7 @@
 # Configurando o Wi-Fi no rootfs do cartão, você ganha SSH sem serial.
 #
 # Uso:
-#   sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" [pasta-de-firmware] [MAC]
+#   sudo ./scripts/wifi-inject.sh /dev/sdX "SSID" "SENHA" [pasta-de-firmware] [MAC] [chave-ssh.pub]
 #
 # A pasta de firmware, se informada, deve conter brcmfmac43430-sdio.bin e
 # brcmfmac43430-sdio.txt (ex.: extraídos de outra imagem FriendlyElec).
@@ -25,6 +25,7 @@ warn() { printf 'aviso: %s\n' "$*" >&2; }
 
 DEV=$1; SSID=$2; PSK=$3; FWDIR=${4:-}
 WIFI_MAC=${5:-${WIFI_MAC:-}}
+SSH_PUB=${6:-${SSH_PUB:-}}
 
 part_of() {
   local d=$1 n=$2
@@ -172,6 +173,23 @@ done
 [[ -e $R/etc/systemd/system/multi-user.target.wants/ssh.service ]] \
   && info "ssh.service habilitado" || warn "ssh.service não habilitado"
 grep -E '^\s*PasswordAuthentication' "$R/etc/ssh/sshd_config" 2>/dev/null | head -n1
+
+# --- 4b. chave SSH (opcional) -----------------------------------------------
+# Sem isso o acesso é por senha (pi/fa do cartão). Com a chave, o instalador
+# consegue entrar sem prompt e o dia a dia fica em login por chave.
+if [[ -n ${SSH_PUB:-} ]]; then
+  [[ -f $SSH_PUB ]] || die "chave SSH não encontrada: $SSH_PUB"
+  key=$(cat "$SSH_PUB")
+  [[ $key =~ ^(ssh-ed25519|ssh-rsa|ecdsa-) ]] || die "arquivo não parece uma chave pública: $SSH_PUB"
+  for home in root home/pi; do
+    [[ -d $R/$home ]] || continue
+    install -d -m 700 "$R/$home/.ssh"
+    touch "$R/$home/.ssh/authorized_keys"
+    grep -qF "$key" "$R/$home/.ssh/authorized_keys" || printf '%s\n' "$key" >> "$R/$home/.ssh/authorized_keys"
+    chmod 600 "$R/$home/.ssh/authorized_keys"
+    info "chave SSH instalada em /$home/.ssh/authorized_keys"
+  done
+fi
 
 # --- 5. resumo ---------------------------------------------------------------
 printf '\n'
