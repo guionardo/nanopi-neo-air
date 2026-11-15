@@ -3,7 +3,7 @@
 # flash-emmc-headless.sh — grava a eMMC a partir do payload do eflasher,
 # sem GUI e sem console serial.
 #
-# Roda DENTRO do rootfs do cartão eflasher (Debian 12 core), como serviço
+# Roda DENTRO do rootfs do próprio eflasher (Ubuntu ou Debian), como serviço
 # systemd oneshot no primeiro boot. Faz o que o /opt/eflasher-gui faria, mas
 # lendo o payload Android sparse com scripts/unsparse.sh.
 #
