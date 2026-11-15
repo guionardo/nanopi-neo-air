@@ -167,6 +167,8 @@ save_conf() {
     printf 'BOARD_IP=%q\n' "${BOARD_IP:-}"
   } > "$CONF"
   chmod 600 "$CONF"
+  # se rodou via sudo, devolve o arquivo ao dono original
+  [[ -n ${SUDO_UID:-} ]] && chown "$SUDO_UID:${SUDO_GID:-$SUDO_UID}" "$CONF" 2>/dev/null || true
   info "configuração salva em $CONF (600)"
 }
 
@@ -248,7 +250,8 @@ resolve_image() {
 }
 
 # --- cartão ------------------------------------------------------------------
-check_sd() {
+check_sd() { # check_sd [desmontar=0|1] [tolerar-montado=0|1]
+  local allow_umount=${1:-0} tolerate=${2:-0}
   [[ -n ${SD_DEV:-} ]] || ask SD_DEV "Dispositivo do cartão SD (ex.: /dev/sdb)"
   [[ -b $SD_DEV ]] || die "não é dispositivo de bloco: $SD_DEV (veja lsblk)"
   [[ $SD_DEV =~ ^/dev/(sd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+|vd[a-z]+)$ ]] \
@@ -260,15 +263,31 @@ check_sd() {
   [[ -n $root_disk && $root_disk == "$(basename "$SD_DEV")" ]] \
     && die "recusando $SD_DEV: é o disco do sistema em execução"
 
-  local mounted
-  mounted=$(lsblk -rno MOUNTPOINT "$SD_DEV" 2>/dev/null | grep -v '^$' | head -3 | xargs echo || true)
-  if [[ -n $mounted ]]; then
-    die "$SD_DEV tem partições montadas ($mounted); desmonte antes (umount)"
+  local mounted_parts
+  mounted_parts=$(lsblk -rno NAME,MOUNTPOINT "$SD_DEV" 2>/dev/null | awk '$2 != "" {print "/dev/" $1, $2}')
+  if [[ -n $mounted_parts ]]; then
+    if ((allow_umount)) && [[ $EUID -eq 0 ]]; then
+      while read -r part mnt; do
+        info "desmontando $part ($mnt)"
+        umount "$part" || die "não consegui desmontar $part; feche o que estiver usando"
+      done <<<"$mounted_parts"
+    elif ((tolerate)); then
+      warn "$SD_DEV tem partições montadas ($(awk '{print $2}' <<<"$mounted_parts" | xargs echo)); o card vai desmontar"
+    else
+      die "$SD_DEV tem partições montadas ($(awk '{print $2}' <<<"$mounted_parts" | xargs echo)); desmonte antes (umount)"
+    fi
   fi
 
-  local size_mb
+  # o cartão precisa caber a imagem (o eflasher trixie tem ~14 GB; o bookworm ~7,5 GB)
+  local img_mb=0 size_mb need_mb
+  case ${IMAGE:-} in
+    *.gz) [[ -f $IMAGE ]] && img_mb=$(( $(gzip -l "$IMAGE" | awk 'NR==2 {print $2}') / 1048576 )) ;;
+    *.img) [[ -f $IMAGE ]] && img_mb=$(( $(stat -c %s "$IMAGE") / 1048576 )) ;;
+  esac
+  need_mb=$(( img_mb > 7000 ? img_mb + 200 : 7000 ))
   size_mb=$(lsblk -bdno SIZE "$SD_DEV" | awk '{print int($1/1024/1024)}')
-  ((size_mb >= 7000)) || die "cartão pequeno demais: ${size_mb} MiB (o eflasher pede ~8 GB)"
+  ((size_mb >= need_mb)) \
+    || die "cartão pequeno demais: ${size_mb} MiB (esta imagem precisa de ~${need_mb} MiB)"
 
   info "cartão: $SD_DEV (${size_mb} MiB) · modelo: $(lsblk -dno MODEL "$SD_DEV" | xargs echo)"
 }
@@ -291,7 +310,7 @@ phase_check() {
   check_deps
   ensure_config
   resolve_image
-  check_sd
+  check_sd 0 1
   echo
   info "tudo pronto para './install.sh card'"
 }
@@ -302,7 +321,7 @@ phase_card() {
   ensure_config
   ensure_key
   resolve_image
-  check_sd
+  check_sd 1
   ((DRY_RUN)) || confirm_card
 
   local dev=$SD_DEV
@@ -314,7 +333,7 @@ phase_card() {
   fi
 
   step "1/3 · gravando a imagem no cartão"
-  bash "$HERE/scripts/flash-sd.sh" "$IMAGE" "$dev"
+  ASSUME_YES=$ASSUME_YES bash "$HERE/scripts/flash-sd.sh" "$IMAGE" "$dev"
 
   step "2/3 · injetando firmware, Wi-Fi e chave SSH"
   bash "$HERE/scripts/wifi-inject.sh" "$dev" "$SSID" "$PSK" "$HERE/firmware" "${WIFI_MAC:-}" "$SSH_KEY.pub"

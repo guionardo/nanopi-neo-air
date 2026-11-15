@@ -14,7 +14,10 @@
 
 set -uo pipefail
 
-PAYLOAD_DIR=/mnt/debian-bookworm-core
+# O payload e os offsets vem do cartao eflasher (eflasher.conf + partmap.txt),
+# entao o script serve para qualquer imagem eflasher (bookworm, trixie, ...).
+# Os valores abaixo sao apenas fallback do layout H3 conhecido.
+PAYLOAD_DIR=${PAYLOAD_DIR:-}
 UNSPARSE=/opt/headless/unsparse.sh
 ARMED=/opt/headless/ARMED
 LOG=/root/flash-emmc.log
@@ -61,7 +64,103 @@ modprobe exfat 2>/dev/null || true
 if ! mountpoint -q "$MNT"; then
   mount -t exfat "$SD_P1" "$MNT" || die "nao consegui montar $SD_P1 em $MNT"
 fi
-[[ -d $PAYLOAD_DIR ]] || die "payload ausente: $PAYLOAD_DIR"
+
+# --- descobrir o payload (autoStart do eflasher.conf) -----------------------
+if [[ -z ${PAYLOAD_DIR:-} ]]; then
+  for conf in "$MNT/eflasher.conf" "$MNT"/*/eflasher.conf; do
+    [[ -f $conf ]] || continue
+    name=$(sed -n 's/^[[:space:]]*autoStart[[:space:]]*=[[:space:]]*//p' "$conf" \
+           | head -n1 | tr -d '\r')
+    [[ -n $name && -d "$MNT/$name" ]] && { PAYLOAD_DIR=$MNT/$name; break; }
+  done
+fi
+if [[ -z ${PAYLOAD_DIR:-} ]]; then
+  # sem autoStart valido: aceita o unico diretorio com rootfs.img
+  for d in "$MNT"/*/; do
+    [[ -f $d/rootfs.img ]] && { PAYLOAD_DIR=${d%/}; break; }
+  done
+fi
+[[ -n ${PAYLOAD_DIR:-} && -d $PAYLOAD_DIR ]] \
+  || die "payload nao encontrado em $MNT (eflasher.conf sem autoStart valido?)"
+log "payload: $PAYLOAD_DIR"
+
+# --- offsets do partmap.txt (fallback: layout H3 fixo) ----------------------
+UBOOT_OFF=0x2000
+OFF_BOOT=0x1800000
+LEN_BOOT=0x2800000
+OFF_ROOTFS=0x4000000
+LEN_ROOTFS=0x58000000
+OFF_USERDATA=0x5C000000
+IMG_UBOOT=u-boot-sunxi-with-spl.bin
+IMG_BOOT=boot.img
+IMG_ROOTFS=rootfs.img
+IMG_USERDATA=userdata.img
+
+if [[ -f $PAYLOAD_DIR/partmap.txt ]]; then
+  while IFS= read -r line; do
+    [[ $line == flash=* ]] || continue
+    part=$(printf '%s' "$line" | cut -d: -f2)
+    off=$(printf '%s'  "$line" | cut -d: -f4 | cut -d, -f1)
+    len=$(printf '%s'  "$line" | cut -d: -f4 | cut -d, -f2)
+    img=$(printf '%s'  "$line" | cut -d: -f5 | tr -d ';\r')
+    [[ -n $off && -n $img ]] || continue
+    case $part in
+      boot0)    UBOOT_OFF=$off;    IMG_UBOOT=$img ;;
+      boot)     OFF_BOOT=$off;     LEN_BOOT=$len;    IMG_BOOT=$img ;;
+      rootfs)   OFF_ROOTFS=$off;   LEN_ROOTFS=$len;  IMG_ROOTFS=$img ;;
+      userdata) OFF_USERDATA=$off; IMG_USERDATA=$img ;;
+    esac
+  done < "$PAYLOAD_DIR/partmap.txt"
+fi
+log "layout: boot=0x$(printf '%x' "$OFF_BOOT") rootfs=0x$(printf '%x' "$OFF_ROOTFS") userdata=0x$(printf '%x' "$OFF_USERDATA")"
+
+# --- tabela de particoes (MBR) ----------------------------------------------
+# O eflasher cria a tabela antes de gravar; sem isso uma eMMC virgem (ou com
+# tabela de outra placa) ficaria sem p1/p2/p3. So reescreve se estiver diferente.
+SEC=512
+P1_START=$((OFF_BOOT / SEC));    P1_SIZE=$((LEN_BOOT / SEC))
+P2_START=$((OFF_ROOTFS / SEC))
+P3_START=$((OFF_USERDATA / SEC))
+if (( ${LEN_ROOTFS:-0} > 0 )); then
+  P2_SIZE=$((LEN_ROOTFS / SEC))
+else
+  P2_SIZE=$((P3_START - P2_START))
+fi
+P3_SIZE=$(( (EMMC_BYTES - OFF_USERDATA) / SEC ))
+
+need_table=0
+cur_p1=$(cat "/sys/block/$emmc/${emmc}p1/start" 2>/dev/null || true)
+cur_p2=$(cat "/sys/block/$emmc/${emmc}p2/start" 2>/dev/null || true)
+cur_p3=$(cat "/sys/block/$emmc/${emmc}p3/start" 2>/dev/null || true)
+[[ $cur_p1 == "$P1_START" && $cur_p2 == "$P2_START" && $cur_p3 == "$P3_START" ]]   || need_table=1
+
+if (( need_table )); then
+  log "criando tabela de particoes: p1=$P1_START+$P1_SIZE p2=$P2_START+$P2_SIZE p3=$P3_START+$P3_SIZE"
+  if command -v parted >/dev/null; then
+    parted -s "$EMMC" mklabel msdos \
+      mkpart primary "${P1_START}s" "$((P1_START + P1_SIZE - 1))s" \
+      mkpart primary "${P2_START}s" "$((P2_START + P2_SIZE - 1))s" \
+      mkpart primary "${P3_START}s" "$((P3_START + P3_SIZE - 1))s" \
+      >/dev/null || die "falha ao criar a tabela de particoes (parted)"
+  elif command -v sfdisk >/dev/null; then
+    sfdisk --no-reread --wipe always "$EMMC" >/dev/null <<EOF || die "falha ao criar a tabela de particoes (sfdisk)"
+label: dos
+unit: sectors
+sector-size: 512
+
+start=$P1_START, size=$P1_SIZE, type=83
+start=$P2_START, size=$P2_SIZE, type=83
+start=$P3_START, size=$P3_SIZE, type=83
+EOF
+  else
+    die "sem parted/sfdisk: nao consigo criar a tabela de particoes"
+  fi
+  partprobe "$EMMC" 2>/dev/null || true
+  partx -u "$EMMC" 2>/dev/null || true
+  udevadm settle 2>/dev/null || sleep 1
+else
+  log "tabela de particoes ja compativel (p1/p2/p3)"
+fi
 
 # --- funcoes auxiliares ------------------------------------------------------
 # le um campo u32 little-endian do cabecalho Android sparse
@@ -87,20 +186,24 @@ grava_sparse() {   # grava_sparse <arquivo.img> <offset_bytes> <rotulo>
 
 # --- gravar ------------------------------------------------------------------
 # 1) U-Boot na area de usuario (NAO em mmcblk*boot0 — conferido na sessao 5)
-log "gravando U-Boot em offset 0x2000"
-dd if="$PAYLOAD_DIR/u-boot-sunxi-with-spl.bin" of="$EMMC" \
-   bs=1024 seek=8 conv=notrunc status=none || die "falha ao gravar U-Boot"
+(( UBOOT_OFF % 1024 == 0 )) || die "offset do U-Boot nao alinhado a 1 KiB: $UBOOT_OFF"
+log "gravando U-Boot ($IMG_UBOOT) em offset $UBOOT_OFF"
+dd if="$PAYLOAD_DIR/$IMG_UBOOT" of="$EMMC" \
+   bs=1024 seek=$((UBOOT_OFF / 1024)) conv=notrunc status=none || die "falha ao gravar U-Boot"
 
-# 2) p1 — boot FAT, offset 0x1800000 (24 MiB)
-log "gravando boot (FAT) em offset 24 MiB"
-dd if="$PAYLOAD_DIR/boot.img" of="$EMMC" \
-   bs=1M seek=24 conv=notrunc status=none || die "falha ao gravar boot.img"
+# 2) p1 — boot FAT
+(( OFF_BOOT % 1048576 == 0 )) || die "offset do boot nao alinhado a 1 MiB: $OFF_BOOT"
+log "gravando boot ($IMG_BOOT) em offset $((OFF_BOOT / 1048576)) MiB"
+dd if="$PAYLOAD_DIR/$IMG_BOOT" of="$EMMC" \
+   bs=1M seek=$((OFF_BOOT / 1048576)) conv=notrunc status=none || die "falha ao gravar o boot"
 
-# 3) p2 — rootfs ext4, offset 0x4000000 (64 MiB)
-grava_sparse "$PAYLOAD_DIR/rootfs.img" 67108864 rootfs
+# 3) p2 — rootfs ext4
+log "gravando rootfs ($IMG_ROOTFS) em offset $OFF_ROOTFS"
+grava_sparse "$PAYLOAD_DIR/$IMG_ROOTFS" "$OFF_ROOTFS" rootfs
 
-# 4) p3 — userdata ext4, offset 0x5C000000 (1472 MiB)
-grava_sparse "$PAYLOAD_DIR/userdata.img" 1543503872 userdata
+# 4) p3 — userdata ext4
+log "gravando userdata ($IMG_USERDATA) em offset $OFF_USERDATA"
+grava_sparse "$PAYLOAD_DIR/$IMG_USERDATA" "$OFF_USERDATA" userdata
 
 sync
 log "sync concluido"

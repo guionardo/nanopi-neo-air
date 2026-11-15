@@ -90,7 +90,12 @@ printf '\n'
 lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,MODEL "$DEV" || true
 printf '\n'
 printf 'TODOS os dados em %s serão apagados.\n' "$DEV"
-read -r -p "Digite o nome do dispositivo (${DEV_NAME}) para confirmar: " CONFIRM
+if [[ ${ASSUME_YES:-0} == 1 ]]; then
+  info "confirmação automática (ASSUME_YES=1)"
+  CONFIRM=$DEV_NAME
+else
+  read -r -p "Digite o nome do dispositivo (${DEV_NAME}) para confirmar: " CONFIRM
+fi
 [[ $CONFIRM == "$DEV_NAME" ]] || die "confirmação incorreta; abortando."
 
 # --- desmontar ---------------------------------------------------------------

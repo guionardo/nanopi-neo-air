@@ -175,6 +175,31 @@ preservar quatro propriedades:
   passa a ser o único periférico planejado, e o conteúdo dele já foi definido:
   CPU, memória, uptime e IP.
 
+## D-008 · Sistema final em Debian 13 (trixie)
+
+**Data:** 2026-11-15 · **Status:** aceita (validação em andamento)
+
+**Contexto.** A placa subiu com Debian 12 (bookworm, payload de 2025-04-02) e
+foi toda configurada nele. Em 2026-03-30 o fabricante publicou os payloads
+`h3-eflasher-debian-trixie-core-4.14-armhf` e
+`h3-sd-debian-trixie-core-4.14-armhf`, com o mesmo kernel de vendor (4.14.111).
+
+**Decisão.** O alvo do instalador passa a ser **Debian 13 (trixie)**, payload
+`debian-trixie-core`. O Debian 12 fica como instalação histórica — é o sistema
+descrito no [log de bordo](12-log-de-bordo.md) e no artigo.
+
+**Consequências.**
+
+- `scripts/flash-emmc-headless.sh` deixa de ter caminho e offsets fixos: lê o
+  `autoStart` do `eflasher.conf` e os offsets do `partmap.txt`, então serve
+  para qualquer imagem eflasher (bookworm, trixie, ubuntu-noble…);
+- o kernel continua 4.14.111 (payload do fabricante), logo tudo o que foi
+  aprendido sobre NVRAM do AP6212, SPI e overlayfs continua valendo;
+- nada é herdado da instalação 12 (senhas, pacotes, perfis): a eMMC é regravada
+  do zero e provisionada pelo instalador;
+- o artigo precisa deixar claro que bookworm foi o ponto de partida, não o
+  destino.
+
 ## Pendências
 
 O que ainda precisa de decisão. Atualizar conforme for resolvendo.

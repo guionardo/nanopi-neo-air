@@ -387,6 +387,27 @@ log de bordo com as sessões de bancada e os "achados", backlog de ideias,
 scripts de flash/provisão/sonda e o firmware do Wi-Fi versionado com procedência.
 Está em <https://github.com/guionardo/nanopi-neo-air>.
 
+### Do bookworm ao trixie
+
+Quando este texto começou a ser escrito, o payload mais novo do fabricante era
+o Debian 12 (bookworm, 2025-04-02). Em 2026-03-30 ele publicou o mesmo conjunto
+para **Debian 13 (trixie)**, com o mesmo kernel 4.14.111 — então o alvo do
+instalador passou a ser trixie. Todos os números deste artigo (163 pacotes,
+systemd 252, OpenSSH 9.2) são do bookworm e ficam como registro do ponto de
+partida.
+
+Trocar de payload expôs uma suposição escondida: o script de flash tinha
+`/mnt/debian-bookworm-core` e `seek=24` cravados no código. No trixie, o
+`partmap.txt` move a `userdata` de 1472 MiB para 1536 MiB — e o flash gravaria
+no lugar errado, silenciosamente. Agora o script lê o `autoStart` do
+`eflasher.conf` e os offsets do `partmap.txt`; trocar de distro virou trocar
+uma linha no `install.conf`. O mesmo ajuste cria a tabela de partições na eMMC
+quando ela não existe, que é o caso de uma placa realmente nova.
+
+Um detalhe que morde antes disso: o eflasher trixie tem **14 GB** de imagem,
+então pede cartão de 16 GB (o bookworm cabia em 8 GB). O instalador compara o
+tamanho do cartão com o da imagem, em vez de assumir que "8 GB serve".
+
 E, para não deixar o processo só como leitura, o repositório tem um instalador
 que faz o caminho inteiro: confere o ambiente, grava o cartão, injeta Wi-Fi +
 firmware + chave SSH, arma a gravação da eMMC e provisiona o sistema final pela
@@ -405,5 +426,6 @@ foi feito, é **por que** aquele parâmetro está naquele valor. Foi o que salvo
 ---
 
 *Valores de rede (SSID, IP e MAC) foram substituídos por placeholders neste
-artigo. O kernel é 4.14.111, o userland é Debian 12 bookworm e a placa é uma
-NanoPi NEO Air com eMMC de 8 GB.*
+artigo. O kernel é 4.14.111, a placa é uma NanoPi NEO Air com eMMC de 8 GB e o
+userland final é Debian 13 (trixie) — os números de pacotes e serviços citados
+são do Debian 12 que rodou primeiro.*

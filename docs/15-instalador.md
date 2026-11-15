@@ -16,19 +16,25 @@ necessárias.
 | --- | --- |
 | Computador | Linux (x86_64 ou arm64), bash 4+ |
 | Ferramentas | `dd`, `mount`, `findmnt`, `lsblk`, `sha256sum`, `ssh`, `ssh-keygen` e `curl` ou `wget` |
-| Leitor de cartão | microSD de **8 GB ou mais** (o eflasher ocupa ~7 GB) |
+| Leitor de cartão | microSD de **16 GB ou mais** para o eflasher trixie (~14 GB); o bookworm cabia em 8 GB |
 | Imagem | eflasher da FriendlyElec (`h3-eflasher-*.img.gz`) — **não** a imagem `sd` |
 | Placa | NanoPi NEO Air com eMMC; fonte 5 V/2 A |
+
+O alvo atual é **Debian 13 (trixie)**, payload
+`h3-eflasher-debian-trixie-core-4.14-armhf-20260330.img.gz`
+(sha256 `7e2943e4…c2fd1`, ver [D-008](11-decisoes.md)). O instalador não depende
+da distro: ele lê do cartão qual payload usar.
 
 Se faltar alguma ferramenta do pacote base, o script tenta instalar via
 `apt`/`dnf`/`pacman`. Para não deixar o script mexer no sistema, use
 `--skip-deps` e instale à mão.
 
 > **Por que a imagem `eflasher` e não a `sd`?** É o eflasher que carrega o
-> payload da eMMC (`boot.img`, `rootfs.img` e `userdata.img` em
-> `/mnt/debian-bookworm-core`). O instalador arma um serviço que grava esse
-> payload sem GUI. A imagem `sd` sobe um sistema no cartão, mas não tem o que
-> gravar na eMMC.
+> payload da eMMC (`boot.img`, `rootfs.img` e `userdata.img`), dentro de um
+> diretório cujo nome vem do `autoStart` do `eflasher.conf` (por exemplo
+> `/mnt/debian-trixie-core`). O instalador arma um serviço que grava esse
+> payload sem GUI, lendo também os offsets do `partmap.txt`. A imagem `sd` sobe
+> um sistema no cartão, mas não tem o que gravar na eMMC.
 
 ## Uso
 
@@ -112,7 +118,7 @@ O script recusa:
 - disco que contém o sistema em execução (comparação por `PKNAME`);
 - disco com qualquer partição montada (lista os pontos de montagem);
 - dispositivo inexistente ou partição em vez do disco inteiro;
-- cartão com menos de 7.000 MiB.
+- cartão menor que a imagem (com margem de 200 MiB).
 
 E, sem `--yes`, exige digitar o caminho do dispositivo (`/dev/sdb`) para
 confirmar a gravação. `--dry-run` mostra os três passos do `card` sem tocar no
