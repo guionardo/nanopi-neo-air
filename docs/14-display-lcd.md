@@ -152,6 +152,34 @@ Regras de montagem:
 > CS (`--cs-gnd`) é aceitável numa bancada de escravo único, mas aí o branco vai
 > para o `GND` (pino 20) e o barramento fica preso a esse display.
 
+## Montagem com cabo flat (IDC)
+
+O header `GPIO1` é **2x12** (24 pinos, 2,54 mm, pinout equivalente aos 24
+primeiros pinos do Raspberry Pi). Não existe "um lado só": os 7 sinais do
+display estão distribuídos nas duas fileiras.
+
+| Fileira | Pinos usados |
+| --- | --- |
+| Ímpares (1, 3, … 23) | **1** (`3V3`), **19** (`DIN`), **23** (`CLK`) |
+| Pares (2, 4, … 24) | **6** (`GND`), **16** (`DC`), **18** (`RST`), **24** (`CE`) |
+
+Com IDC, a montagem fica assim:
+
+- conector **IDC fêmea 2x12, passo 2,54 mm**, num cabo de 24 vias (1,27 mm);
+- o **fio vermelho do cabo é o pino 1** (`3V3`) — confira a continuidade do
+  pino 1 do conector até o pino 1 do header **antes** de plugar;
+- as 17 vias que sobram incluem **5 V** (pinos 2 e 4) e **UART2** (11, 13, 15
+  e 22): corte-as curtas e isole as pontas;
+- o código de cores acima vale para os **fios do lado do módulo**; o cabo flat
+  tem a sequência do arco-íris, então etiquete por **posição**, não por cor;
+- prenda o cabo com abraçadeira ou um pingo de cola para não alavancar o
+  header da placa, e mantenha-o longe da antena do AP6212.
+
+> Identificação do pino 1 na placa: é o pad quadrado (ou o ponto na serigrafia)
+> do canto. Com a placa ligada e **nada plugado**, dá para confirmar com o
+> multímetro: pino 1 = 3,3 V, pino 2 = 5 V, pino 6 = `GND`. Se o pino 1 não der
+> 3,3 V, o conector está invertido — não plugue o display.
+
 ## A armadilha do CS (leia antes de soldar)
 
 Aqui o kernel **não** aciona o chip select. Isso é contraintuitivo e custa uma
