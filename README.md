@@ -54,6 +54,7 @@ Depois disso: [configuração base](docs/06-configuracao-base.md),
 ```
 README.md                        visão geral e ponto de entrada
 docs/                            documentação do processo (índice em docs/README.md)
+artigo/                          artigo de blog (Markdown + front matter) sobre o processo
 firmware/                        firmware + NVRAM do AP6212 (obrigatório para o Wi-Fi)
 scripts/flash-sd.sh              gravador de imagem para microSD (Linux, com validações)
 scripts/flash-emmc-headless.sh   grava a eMMC a partir do próprio cartão (sem GUI)
