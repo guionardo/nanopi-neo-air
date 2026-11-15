@@ -21,18 +21,39 @@ PAYLOAD_DIR=${PAYLOAD_DIR:-}
 UNSPARSE=/opt/headless/unsparse.sh
 ARMED=/opt/headless/ARMED
 LOG=/root/flash-emmc.log
+STATUS=/root/flash-emmc.status
 MNT=/mnt
 
 # --- log em arquivo e no console ---------------------------------------------
 exec >>"$LOG" 2>&1
 
 log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
-die() { log "ERRO: $*"; log "FLASH_FAILED — placa NAO sera desligada"; exit 1; }
+die() {
+  log "ERRO: $*"
+  printf 'FAILED %s\n' "$*" > "${STATUS:-/root/flash-emmc.status}"
+  log "FLASH_FAILED — placa NAO sera desligada"
+  exit 1
+}
 
 log "===== inicio do flash headless ====="
 
-[[ -f $ARMED ]] || die "flag $ARMED ausente; nada a fazer"
+# --- trava de instancia unica ----------------------------------------------
+# systemd (flash-emmc.service) e /etc/rc.local disparam o script no mesmo boot.
+# Sem trava, os dois podem passar pelo teste do ARMED antes de qualquer um
+# remover a flag e gravar a eMMC ao mesmo tempo.
+exec 9>/run/flash-emmc.lock 2>/dev/null || exec 9>/tmp/flash-emmc.lock
+if command -v flock >/dev/null; then
+  flock -n 9 || { log "outra instancia ja esta gravando; saindo"; exit 0; }
+elif ! mkdir /run/flash-emmc.lock.d 2>/dev/null; then
+  log "outra instancia ja esta gravando; saindo"; exit 0
+fi
+
+if [[ ! -f $ARMED ]]; then
+  log "flag $ARMED ausente; nada a fazer (flash ja executado)"
+  exit 0
+fi
 rm -f "$ARMED"          # desarma: nunca roda duas vezes
+printf 'RUNNING %s\n' "$(date +%s)" > "$STATUS"
 
 # --- localizar o SD (boot) e a eMMC (destino) --------------------------------
 root_src=$(findmnt -no SOURCE / 2>/dev/null || true)
@@ -226,6 +247,7 @@ fi
 
 umount "$MNT" 2>/dev/null || true
 
+printf 'DONE verify=%s\n' "$VERIFY" > "$STATUS"
 log "FLASH_DONE verify=$VERIFY"
 log "desligando a placa: remova o cartao e ligue de novo para subir pela eMMC"
 

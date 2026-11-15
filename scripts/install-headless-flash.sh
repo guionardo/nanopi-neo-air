@@ -124,7 +124,9 @@ info "auto-flash armado (roda uma vez e se desarma)"
 
 # --- segundo gancho: /etc/rc.local (comprovadamente executado nesta imagem) ---
 # O journal da sessão 4 mostra "Started /etc/rc.local" — é um ponto confiável.
-# O script se desarma sozinho, então rodar pelo rc.local não duplica nada.
+# Os dois gatilhos rodam no mesmo boot, então flash-emmc.sh tem uma trava
+# (flock) e o segundo a sair sem gravar; sem isso os dois poderiam escrever na
+# eMMC ao mesmo tempo.
 RCLOCAL=$MNT/etc/rc.local
 MARK='# --- auto-flash eMMC (headless) ---'
 HOOK='( /opt/headless/flash-emmc.sh >/dev/null 2>&1 & )'
