@@ -1,9 +1,16 @@
 ---
-title: "NanoPi NEO Air: de placa teimosa a host headless"
+title: 'NanoPi NEO Air: de placa teimosa a host headless'
+description: 'Como coloquei um NanoPi NEO Air para bootar sozinho pela eMMC, subir Wi-Fi com o NVRAM certo e ficar acessível por SSH — sem monitor, sem Ethernet e com um adaptador serial que não cooperava.'
 date: 2026-11-15
-description: "Como coloquei um NanoPi NEO Air para bootar sozinho pela eMMC, subir Wi-Fi com o NVRAM certo e ficar acessível por SSH — sem monitor, sem Ethernet e com um adaptador serial que não cooperava."
-tags: ["nanopi", "allwinner-h3", "debian", "emmc", "linux", "embarcados", "wifi"]
 slug: nanopi-neo-air-host-headless
+tags: [nanopi, allwinner-h3, debian, emmc, linux, embarcados, wifi]
+draft: true
+lang: pt
+translationKey: nanopi-neo-air-host-headless
+# Quando as fotos estiverem em public/images/nanopi-neo-air-host-headless/,
+# descomente as duas linhas abaixo (o caminho é relativo a public/).
+# heroImage: /images/nanopi-neo-air-host-headless/header.jpg
+# heroImageAlt: 'NanoPi NEO Air sobre a bancada, com cartão SD e adaptador serial ao lado.'
 ---
 
 > **Resumo:** uma placa sem HDMI, sem Ethernet e com um sistema desconhecido na
@@ -12,6 +19,14 @@ slug: nanopi-neo-air-host-headless
 > partir dela, tudo virou reprovisionável pela rede — inclusive o Wi-Fi, que só
 > funcionou depois de trocar um único arquivo de NVRAM que o próprio fabricante
 > distribui errado.
+
+<!-- FOTO (header): a placa em cima da bancada, com o cartão SD e o adaptador
+     serial ao lado — é a imagem de abertura do post.
+     arquivo: public/images/nanopi-neo-air-host-headless/header.jpg
+     proporção: 1600×900 (16:9)
+     legenda: "NanoPi NEO Air: 40 × 40 mm, sem HDMI e sem Ethernet."
+     markdown: ![NanoPi NEO Air sobre a bancada](/images/nanopi-neo-air-host-headless/header.jpg)
+-->
 
 ## O problema
 
@@ -64,6 +79,17 @@ a placa boota **sem o cartão** — e é isso que precisa ser testado antes de
 qualquer configuração: desligar, remover o cartão, ligar, esperar o LED e ver se
 ela aparece na rede.
 
+<!-- VÍDEO: o boot com o cartão no lugar — LED verde piscando e o log do
+     eflasher correndo na tela do terminal (gravação de tela ou celular
+     apontado para a placa).
+     arquivo: public/videos/nanopi-neo-air-host-headless/boot-emmc.mp4
+     duração: 15–25 s, sem áudio ou com áudio removido
+     legenda: "Primeiro boot: o cartão grava a eMMC e a placa desliga sozinha."
+     html:
+       <video controls preload="metadata" playsinline
+              src="/videos/nanopi-neo-air-host-headless/boot-emmc.mp4"></video>
+-->
+
 ## O Wi-Fi que não subia
 
 Aqui está o achado que mais custou tempo — e o mais divertido de contar.
@@ -105,6 +131,13 @@ Connected to aa:bb:cc:dd:ee:01 (on wlan0)
         signal: -31 dBm
         rx bitrate: 72.2 MBit/s
 ```
+
+<!-- FOTO (captura de tela): o terminal com `iw dev wlan0 link` e o sinal
+     verde, para o leitor ver que é saída real e não exemplo inventado.
+     arquivo: public/images/nanopi-neo-air-host-headless/iw-link.png
+     legenda: "O rádio associado: -31 dBm, 72 Mbit/s."
+     markdown: ![Saída do iw dev wlan0 link](/images/nanopi-neo-air-host-headless/iw-link.png)
+-->
 
 ### A parte que ninguém acredita
 
@@ -154,6 +187,13 @@ um script rodando **de fora**, sobre o rootfs da eMMC:
 ==> perfil criado: /etc/NetworkManager/system-connections/minha-rede.nmconnection
 ==> sshd habilitado no boot da eMMC
 ```
+
+<!-- FOTO (captura de tela): a saída do script de provisionamento rodando no
+     cartão, com as linhas "NVRAM confirmado: AP6212" e "perfil criado".
+     arquivo: public/images/nanopi-neo-air-host-headless/provisionamento.png
+     legenda: "Provisionando a eMMC pela rede, com o cartão no ar."
+     markdown: ![Saída do provisionamento da eMMC](/images/nanopi-neo-air-host-headless/provisionamento.png)
+-->
 
 Nenhum ciclo de "tirar cartão, gravar, devolver". E quando algo dá errado, o
 cartão continua ali, intacto, como saída de emergência.
@@ -300,10 +340,32 @@ A fiação que ficou definida:
 | `RST` | pino 18 | `PG9` = 201 |
 | `LIGHT` | jumper do módulo | — |
 
+<!-- FOTO (galeria, 2 imagens lado a lado quando publicar): o módulo PCD8544
+     e o jumper do backlight; e o header da placa com os fios soldados.
+     arquivos:
+       public/images/nanopi-neo-air-host-headless/display-modulo.jpg
+       public/images/nanopi-neo-air-host-headless/display-fiacao.jpg
+     legenda: "O módulo Nokia 5110 e a fiação no header de 24 pinos."
+     markdown (uma por linha):
+       ![Módulo LCD Nokia 5110 com o jumper do backlight](/images/nanopi-neo-air-host-headless/display-modulo.jpg)
+       ![Fiação do display no header da NanoPi](/images/nanopi-neo-air-host-headless/display-fiacao.jpg)
+-->
+
 O barramento já foi validado com um teste de fumaça que não instala nada —
 `ioctl` direto no `spidev` pela biblioteca padrão do Python — e transmitiu 2536
 bytes com zero erros. Falta plugar o display e ver os padrões na tela. Quando
 isso acontecer, conto aqui o resultado (e a tela de status).
+
+<!-- VÍDEO: a tela de status funcionando — IP, CPU, memória e uptime no LCD,
+     com o terminal ao lado mostrando os mesmos valores. Gravar só depois de
+     validar o display; até lá este bloco fica comentado.
+     arquivo: public/videos/nanopi-neo-air-host-headless/display-status.mp4
+     duração: 10–20 s (plano fixo, sem áudio)
+     legenda: "O painel de bancada: o que você veria ao logar, sem logar."
+     html:
+       <video controls preload="metadata" playsinline
+              src="/videos/nanopi-neo-air-host-headless/display-status.mp4"></video>
+-->
 
 ## O que eu faria diferente
 
@@ -323,6 +385,18 @@ isso acontecer, conto aqui o resultado (e a tela de status).
 Tudo isso virou um repositório de documentação: decisões numeradas (`D-001`…),
 log de bordo com as sessões de bancada e os "achados", backlog de ideias,
 scripts de flash/provisão/sonda e o firmware do Wi-Fi versionado com procedência.
+Está em <https://github.com/guionardo/nanopi-neo-air>.
+
+E, para não deixar o processo só como leitura, o repositório tem um instalador
+que faz o caminho inteiro: confere o ambiente, grava o cartão, injeta Wi-Fi +
+firmware + chave SSH, arma a gravação da eMMC e provisiona o sistema final pela
+rede. Do computador, tudo cabe em três comandos:
+
+```bash
+./install.sh card     # grava e prepara o cartão
+./install.sh net      # espera a placa, grava a eMMC e provisiona
+./install.sh verify   # confere o sistema que subiu da eMMC
+```
 
 Não é burocracia: seis meses depois, o que você vai querer saber não é *o que*
 foi feito, é **por que** aquele parâmetro está naquele valor. Foi o que salvou o
