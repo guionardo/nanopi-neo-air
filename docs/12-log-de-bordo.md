@@ -1166,3 +1166,69 @@ bytes_tx: 0 -> 2536   errors: 0
 ```
 
 2536 = 5 × 504 (quadros) + 6 (init) + 2 × 5 (endereço por quadro).
+
+## Sessão 15 — 2026-11-15 · trixie na eMMC: gravar, provisionar e verificar
+
+O cartão foi gravado com o eflasher trixie (`h3-eflasher-debian-trixie-core`,
+14 GB) e a placa subiu por ele em `192.168.88.53`. O auto-flash rodou sem GUI:
+14.061 MiB gravados em **1326 s (11,1 MB/s)**, `e2fsck -fn` na p2 sem erros,
+`FLASH_DONE verify=ok` e `poweroff` automático.
+
+```text
+[13:47:00] userdata: gravado
+[13:47:03] p2 OK: superbloco ext4 valido e sem erros
+[13:47:06] FLASH_DONE verify=ok
+```
+
+Com a placa de novo no cartão, o `net` confirmou o `verify=ok` no log, montou
+`/dev/mmcblk1p2` e provisionou: firmware real do AP6212 (substituindo os
+symlinks para `/lib/firmware/ap6212/`), perfil do NetworkManager com
+`powersave=2` e `cloned-mac-address`, hostname `nanopi` e `/etc/firstuse`.
+Depois desligou a placa para a troca do cartão.
+
+Sem cartão, a eMMC apareceu como `mmcblk0` e a placa subiu em `192.168.88.55`
+com o MAC fixo `02:00:00:00:00:01`. O `verify` fechou:
+
+```text
+root em: overlay
+boot pela eMMC confirmado (mmcblk0p2 presente, sem cartão)
+nanopi
+up 10 minutes
+firstuse: 1
+*:FURLANz:100
+unidades falhando: 0
+```
+
+### Achado 33 — o flash headless se desarma antes de gravar
+
+O script remove `/opt/headless/ARMED` **antes** de tocar na eMMC. No segundo
+boot (o do provisionamento) os dois gatilhos — o serviço systemd e o
+`rc.local` — encontram a flag ausente e registram `FLASH_FAILED`, sem gravar
+nada. O `wait_flash` do `install.sh` aprendeu a procurar primeiro por
+`FLASH_DONE verify=ok` no log; um `FLASH_FAILED` **posterior** é ruído.
+
+Por isso o cartão **não** precisa ser atualizado entre a gravação e o
+provisionamento. Reinstalar o script com `./install.sh card` rearmaria a placa
+e ela regravaria a eMMC no próximo boot — o que apagaria o provisionamento.
+
+### Achado 34 — a chave SSH morava só no cartão
+
+O `wifi-inject.sh` escreve `/root/.ssh/authorized_keys` no rootfs **do
+cartão**. O `provision-emmc-wifi.sh` copiava firmware, perfil de rede, hostname
+e habilitava o `sshd` — mas não a chave. Resultado: a eMMC subiu e o SSH
+recusou a chave, sobrando só a senha padrão do fabricante (`fa`, `PermitRootLogin
+yes`). O conserto foi copiar `/root/.ssh/authorized_keys` do cartão para a
+eMMC, e o script passou a fazer isso. A senha `fa` continua valendo: troque-a
+ou desabilite `PasswordAuthentication` depois do primeiro acesso por chave.
+
+### Achado 35 — o trixie não traz `iw`
+
+O `verify` original lia o link com `iw dev wlan0 link`. No payload trixie o
+`iw` não está instalado, então a fase passou a usar
+`nmcli -t -f IN-USE,SSID,SIGNAL device wifi list` com `iw` como alternativa.
+
+O root em overlay também mudou de forma: o `findmnt -no SOURCE /` devolve
+`overlay` e as opções mostram `lowerdir=/root,upperdir=/data/root` (caminhos
+remapeados pelo namespace), não os dispositivos. A checagem confiável é
+estrutural: **sem cartão** a eMMC é `mmcblk0`, então a fase confere a ausência
+de `/dev/mmcblk1` e a presença de `/dev/mmcblk0p2`.

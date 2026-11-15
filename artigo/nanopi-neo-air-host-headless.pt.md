@@ -419,6 +419,13 @@ rede. Do computador, tudo cabe em três comandos:
 ./install.sh verify   # confere o sistema que subiu da eMMC
 ```
 
+O caminho trixie foi exercitado de ponta a ponta nesta bancada: 14.061 MiB
+gravados em 1326 s (11,1 MB/s), `verify=ok` na p2 e, no boot seguinte pela
+eMMC, raiz em `mmcblk0p2` via overlay, Wi-Fi associado e zero unidades
+falhando. Duas coisas só apareceram na prática: a eMMC não herdava a
+`authorized_keys` do cartão — sobrava a senha padrão do fabricante — e o
+payload trixie não traz `iw`, então a checagem de sinal passou a usar `nmcli`.
+
 Não é burocracia: seis meses depois, o que você vai querer saber não é *o que*
 foi feito, é **por que** aquele parâmetro está naquele valor. Foi o que salvou o
 `xtalfreq`.

@@ -103,13 +103,20 @@ verifica (`FLASH_DONE verify=ok`) e desliga sozinha.
 4. pede para você religar a placa **ainda com o cartão**;
 5. copia e roda [`scripts/provision-emmc-wifi.sh`](../scripts/provision-emmc-wifi.sh)
    na placa, que monta a eMMC e escreve: firmware/NVRAM, perfil de Wi-Fi
-   (`powersave=2` em `[wifi]`, MAC fixo opcional), `sshd` habilitado e hostname;
+   (`powersave=2` em `[wifi]`, MAC fixo opcional), `sshd` habilitado, a
+   `authorized_keys` copiada do cartão e o hostname;
 6. desliga a placa para você tirar o cartão.
 
 ### `verify`
 
-Entra por SSH e confere: origem do root (`mmcblk0p2` = eMMC), hostname, uptime,
+Entra por SSH e confere: origem do root, se o boot veio da eMMC (sem cartão, é
+`mmcblk0p2`; com cartão, `/dev/mmcblk1` existe), hostname, uptime, `firstuse`,
 associação Wi-Fi (SSID e sinal) e unidades systemd falhando. É leitura pura.
+
+No trixie o root é `overlay` e o `findmnt` mostra caminhos remapeados
+(`lowerdir=/root`), então a fase não procura o device nas opções: ela confere
+que **não** há `mmcblk1` (cartão) e que `mmcblk0p2` existe. O sinal vem do
+`nmcli` (o payload trixie não traz `iw`).
 
 ## Segurança do dispositivo
 
@@ -129,12 +136,12 @@ cartão.
 | Fase | Situação |
 | --- | --- |
 | `check` | ✅ recusa disco raiz, disco com partição montada e device inexistente; valida gzip |
-| `verify` | ✅ executado contra a placa real (root overlay, Wi-Fi, 0 unidades falhando) |
-| `card` | 🟡 recusas de segurança testadas; gravação em cartão real pendente |
-| `net` | 🟡 descoberta e leitura do log implementadas; ciclo completo pendente |
+| `card` | ✅ eflasher trixie gravado em cartão de 58,6 GB (14 GB em 1326 s) |
+| `net` | ✅ ciclo completo: `FLASH_DONE verify=ok` → provisionamento → `poweroff` |
+| `verify` | ✅ placa real em trixie: overlay, `firstuse`, Wi-Fi e 0 unidades falhando |
 
-Enquanto `card`/`net` não forem exercitados de ponta a ponta, o caminho manual
-dos documentos 03–07 continua sendo a referência.
+O caminho manual dos documentos 03–07 continua válido como referência do que o
+script faz por baixo.
 
 ## Diagnóstico
 
@@ -154,5 +161,7 @@ dos documentos 03–07 continua sendo a referência.
 - não suporta macOS nem Windows — usa `dd`, `mount` e utilitários GNU;
 - não troca senhas: o provisionamento **não** sincroniza `/etc/shadow` por
   padrão (seria destrutivo numa placa já usada); use `SYNC_PASS=1` à mão em
-  instalação nova;
+  instalação nova. A eMMC do payload mantém a senha padrão do fabricante
+  (`fa`) para o `root` — troque-a ou desabilite `PasswordAuthentication`
+  depois do primeiro acesso por chave;
 - não mexe no bootloader nem no kernel: eles vêm do payload do fabricante.

@@ -11,13 +11,14 @@ processo possa ser repetido ou auditado depois.
 
 | Item | Situação |
 | --- | --- |
-| Hardware | Em mãos; **eMMC com Debian 12 bootando sem cartão** |
-| SO | Debian 12 bookworm (payload `debian-bookworm-core`), kernel 4.14.111, armhf |
+| Hardware | Em mãos; **eMMC com Debian 13 bootando sem cartão** |
+| SO | Debian 13 trixie (payload `debian-trixie-core`), kernel 4.14.111, armhf |
 | Acesso | **SSH por Wi-Fi** em `192.168.1.50`, host `ctl-nanopi` (`root`, chave do host instalada) |
 | Wi-Fi | `minha-rede`, AP6212, NVRAM do AP6212 versionado; MAC fixo `02:00:00:00:00:01` |
 | Root | overlayfs: `mmcblk0p2` (1,4 GB) + `userdata` (5,8 GB) |
 | Console serial | **Não confiável** (adaptador PL2303 instável); o cartão SD é o canal de recuperação |
 | Papel do controlador | **Host headless, acesso só por SSH** (D-007, ver [docs/11-decisoes.md](docs/11-decisoes.md)) |
+| Instalador | `install.sh` validado de ponta a ponta (check → card → net → verify) |
 | Documentação | Completa; ideias futuras em [backlog](docs/13-backlog.md) |
 
 ## Por onde começar
