@@ -126,6 +126,19 @@ mkdir -p "$E/etc/systemd/system/multi-user.target.wants"
         "$E/etc/systemd/system/multi-user.target.wants/ssh.service"
 info "sshd habilitado no boot da eMMC"
 
+# --- 4a. chave SSH ----------------------------------------------------------
+# O wifi-inject.sh escreveu a chave no cartão, mas a eMMC do payload não tem
+# nenhuma: sem isso o primeiro boot só aceita a senha padrão do fabricante
+# ("fa"). Copiar a chave do cartão mantém o acesso por chave desde o primeiro
+# boot e é o que o install.sh espera no verify.
+if [[ -s /root/.ssh/authorized_keys ]]; then
+  install -d -m 700 "$E/root/.ssh"
+  install -m 600 /root/.ssh/authorized_keys "$E/root/.ssh/authorized_keys"
+  info "chave SSH instalada na eMMC ($(wc -l < "$E/root/.ssh/authorized_keys") chave(s))"
+else
+  printf 'aviso: sem /root/.ssh/authorized_keys no cartão — a eMMC só aceitará senha\n' >&2
+fi
+
 # --- 4b. hostname (opcional) ------------------------------------------------
 # Sem isso o primeiro boot roda o friendlyelec_firstuse.sh e o hostname vira o
 # nome padrão da placa. Criar /etc/firstuse marca "já configurado" e evita que
@@ -146,9 +159,13 @@ fi
 # --- 5. relatório ----------------------------------------------------------
 printf '\n'
 info "Wi-Fi da eMMC configurado para \"$SSID\""
-printf 'Obs.: /etc/firstuse ainda não existe — no primeiro boot o\n'
-printf 'friendlyelec_firstuse.sh vai acertar o hostname para o nome da placa.\n'
-printf 'Ajuste o hostname depois, com a eMMC já no ar.\n'
+if [[ -n ${NEW_HOST:-} ]]; then
+  info "hostname: $NEW_HOST (com /etc/firstuse, o firstuse.sh não mexe mais)"
+else
+  printf 'Obs.: /etc/firstuse não foi criado — no primeiro boot o\n'
+  printf 'friendlyelec_firstuse.sh vai acertar o hostname para o nome da placa.\n'
+  printf 'Ajuste o hostname depois, com a eMMC já no ar.\n'
+fi
 
 sync
 umount "$E"
