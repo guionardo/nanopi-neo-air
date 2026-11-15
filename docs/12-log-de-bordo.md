@@ -1199,6 +1199,10 @@ firstuse: 1
 unidades falhando: 0
 ```
 
+Um `systemctl reboot` fechou a validação: a placa voltou em ~30 s, o SSH
+entrou pela chave, o login por senha foi recusado (`Permission denied
+(publickey)`) e o `verify` repetiu 0 unidades falhando.
+
 ### Achado 33 — o flash headless se desarma antes de gravar
 
 O script remove `/opt/headless/ARMED` **antes** de tocar na eMMC. No segundo
