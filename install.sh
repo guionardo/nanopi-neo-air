@@ -388,17 +388,38 @@ discover_board() {
 }
 
 wait_flash() {
-  local ip=$1 tries=${2:-120} log
+  local ip=$1 tries=${2:-120} status misses=0
   info "aguardando a gravação da eMMC (até ~20 min)"
   for ((i=1; i<=tries; i++)); do
-    log=$(board_ssh "$ip" 'cat /root/flash-emmc.log 2>/dev/null | tail -3' 2>/dev/null || true)
-    if grep -q 'FLASH_DONE verify=ok' <<<"$log"; then
+    # 1) estado explícito (cartões preparados com a versão nova do script)
+    status=$(board_ssh "$ip" 'cat /root/flash-emmc.status 2>/dev/null' 2>/dev/null || true)
+    case $status in
+      FAILED*) die "a gravação da eMMC falhou: $status — veja /root/flash-emmc.log" ;;
+    esac
+
+    # 2) sucesso registrado no log. Basta existir uma vez: um FLASH_FAILED
+    #    posterior costuma ser o rc.local tentando rodar de novo sem ARMED.
+    if board_ssh "$ip" 'grep -q "FLASH_DONE verify=ok" /root/flash-emmc.log' 2>/dev/null; then
       info "eMMC gravada e verificada (verify=ok)"
       return 0
     fi
-    if grep -q 'FLASH_FAILED' <<<"$log"; then
-      printf '%s\n' "$log" >&2
+
+    # 3) falha de verdade = FLASH_FAILED sem nenhum progresso de gravação
+    if board_ssh "$ip" 'grep -q "FLASH_FAILED" /root/flash-emmc.log' 2>/dev/null \
+       && ! board_ssh "$ip" 'grep -q "chunk=" /root/flash-emmc.log' 2>/dev/null; then
+      board_ssh "$ip" 'tail -10 /root/flash-emmc.log' >&2 || true
       die "a gravação da eMMC falhou — log acima"
+    fi
+
+    # 4) placa sumiu: provavelmente desligou ao terminar
+    if ! board_ssh "$ip" true 2>/dev/null; then
+      ((misses++))
+      if ((misses >= 6)); then
+        warn "a placa não responde há 60 s (desligou ao fim da gravação?)"
+        return 0
+      fi
+    else
+      misses=0
     fi
     printf '.'
     sleep 10
@@ -430,10 +451,25 @@ phase_net() {
 ${Y}A placa desliga sozinha depois de gravar.${N}
 Ligue de novo, ${B}ainda com o cartão${N}, e pressione Enter para provisionar a eMMC.
 EOF
-  ((ASSUME_YES)) || read -r _
+  if board_ssh "$BOARD_IP" true 2>/dev/null; then
+    info "placa ainda no ar; seguindo direto"
+  else
+    ((ASSUME_YES)) || read -r _
+    # mesmo com --yes, espera a placa voltar quando ela desligou
+    _back=0
+    for _try in $(seq 1 60); do
+      board_ssh "$BOARD_IP" true 2>/dev/null && { _back=1; break; }
+      sleep 5
+    done
+    # o DHCP pode devolver outro IP no segundo boot: refaz a descoberta
+    ((_back)) || { warn "a placa não voltou em $BOARD_IP; procurando de novo"; BOARD_IP=''; }
+  fi
 
   discover_board
   board_ssh "$BOARD_IP" 'true' || die "a placa não respondeu no segundo boot"
+  if ! board_ssh "$BOARD_IP" 'grep -q "FLASH_DONE verify=ok" /root/flash-emmc.log' 2>/dev/null; then
+    warn "não achei 'FLASH_DONE verify=ok' no log do cartão; siga conferindo o log"
+  fi
 
   step "3/3 · provisionando o sistema da eMMC"
   scp -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
@@ -458,14 +494,29 @@ phase_verify() {
   [[ -n ${BOARD_IP:-} ]] || discover_board
   local ip=$BOARD_IP src fails
   info "conferindo $ip"
-  src=$(board_ssh "$ip" 'findmnt -no SOURCE /')
+
+  src=$(board_ssh "$ip" 'findmnt -no SOURCE /' || true)
   info "root em: $src"
-  grep -q 'mmcblk0p' <<<"$src" || warn "o root não está na eMMC (mmcblk0p2) — cartão ainda no lugar?"
-  board_ssh "$ip" 'hostname; uptime -p'
-  board_ssh "$ip" 'iw dev wlan0 link 2>/dev/null | sed -n "2p;6p"'
-  fails=$(board_ssh "$ip" 'systemctl --failed --no-legend --no-pager | wc -l')
+
+  # Sem cartão a eMMC aparece como mmcblk0; com o cartão ela vira mmcblk1.
+  if board_ssh "$ip" 'test -b /dev/mmcblk1' 2>/dev/null; then
+    warn "ainda existe /dev/mmcblk1 — o cartão parece estar no lugar"
+  elif board_ssh "$ip" 'test -b /dev/mmcblk0p2' 2>/dev/null; then
+    info "boot pela eMMC confirmado (mmcblk0p2 presente, sem cartão)"
+  else
+    warn "não achei a eMMC (mmcblk0p2) na placa"
+  fi
+
+  board_ssh "$ip" 'hostname; uptime -p' || true
+  board_ssh "$ip" 'echo -n "firstuse: "; cat /etc/firstuse 2>/dev/null || echo "(ausente)"' || true
+
+  # sinal do Wi-Fi: nmcli existe no trixie; iw, no bookworm
+  board_ssh "$ip" 'nmcli -t -f IN-USE,SSID,SIGNAL device wifi list 2>/dev/null | grep "^\*" \
+                   || iw dev wlan0 link 2>/dev/null | sed -n "2p;6p" || true' || true
+
+  fails=$(board_ssh "$ip" 'systemctl --failed --no-legend --no-pager | wc -l' || echo '?')
   info "unidades falhando: $fails"
-  (( fails == 0 )) || warn "há unidades falhando; rode: ssh root@$ip systemctl --failed"
+  [[ $fails == 0 ]] || warn "há unidades falhando; rode: ssh root@$ip systemctl --failed"
   info "pronto"
 }
 
