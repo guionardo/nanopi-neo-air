@@ -117,6 +117,41 @@ O módulo é **write-only**: o pino `MISO` (pino 21) fica sem ligação. São 7 
 até o header (`VCC`, `GND`, `CLK`, `DIN`, `CE`, `DC`, `RST`); o `LIGHT` só entra
 se o jumper do backlight estiver aberto.
 
+## Código de cores dos fios
+
+Padrão fixado em 2026-11-15, com o estoque da bancada (8 cores). A regra de
+ouro: **vermelho é sempre alimentação e preto é sempre terra** — nunca use
+vermelho para `RST` "porque é reset".
+
+| Fio | Sinal | Pino do módulo | Pino do header | Por quê essa cor |
+| --- | --- | --- | --- | --- |
+| **vermelho** | `VCC` (3,3 V) | 6 | 1 | convenção universal de positivo |
+| **preto** | `GND` | 8 | 6 | convenção universal de terra |
+| **laranja** | `CLK` / `SCLK` | 5 | 23 | o "batimento" do barramento, cor quente |
+| **amarelo** | `DIN` / `MOSI` | 4 | 19 | par de dados, vizinho do laranja |
+| **verde** | `DC` / `A0` | 3 | 16 | controle de dados/comando |
+| **azul** | `RST` / `RES` | 1 | 18 | cor fria para o reset |
+| **branco** | `CE` / `CS` | 2 | 24 | "habilita" o chip; neutro |
+| **marrom** | `LIGHT` / `BL` | 7 | 3,3 V via resistor (ou reserva) | reserva: jumper do backlight / dimmer futuro |
+
+Regras de montagem:
+
+- **etiquete as duas pontas** (fita ou número) antes de enfiar no header; cor
+  ajuda, rótulo resolve;
+- **conferência de continuidade** pino a pino com o multímetro, **antes** de
+  energizar: sem curtos entre vizinhos e sem `VCC`↔`GND`;
+- mantenha os fios com o **mesmo comprimento** (≤ 30 cm) e passe o par
+  vermelho/preto junto; sinais longos e soltos pioram a EMI;
+- afaste o chicote da **antena do AP6212** e confira o RSSI depois de fechar a
+  tampa;
+- o **marrom** só entra se o jumper do backlight estiver aberto e você precisar
+  alimentar o `LIGHT` por fora (100 Ω em série). Com o jumper fechado, deixe-o
+  desconectado — ele fica guardado para o dimmer em `PG11` (pino 7).
+
+> O `CE` fica no **pino 24 (PC3)** com CS por software (`--cs 67`). Aterrar o
+> CS (`--cs-gnd`) é aceitável numa bancada de escravo único, mas aí o branco vai
+> para o `GND` (pino 20) e o barramento fica preso a esse display.
+
 ## A armadilha do CS (leia antes de soldar)
 
 Aqui o kernel **não** aciona o chip select. Isso é contraintuitivo e custa uma
@@ -298,6 +333,7 @@ formato MSB-first que o PCD8544 espera.
 - [x] ~~registrar os rótulos do módulo~~ — `RST, CE, DC, DIN, CLK, VCC, LIGHT, GND`
 - [x] ~~decidir backlight~~ — fixo, ligado pelo **jumper do módulo**; `PG11` fica para um dimmer futuro
 - [ ] fechar o jumper do backlight e confirmar se o `LIGHT` pode ficar sem fio
-- [ ] decidir CS por software (pino 24) ou aterrado — o padrão documentado é software
+- [x] ~~decidir CS~~ — por **software** no pino 24 (`--cs 67`)
+- [x] ~~padronizar as cores dos fios~~ — ver "Código de cores dos fios"
 - [ ] rodar o teste de fumaça e registrar o resultado no log de bordo
 - [ ] medir o RSSI do Wi-Fi depois de montar o display
