@@ -259,6 +259,50 @@ Sequência de conferência com multímetro, **antes** de energizar:
 3. com a placa ligada: 3,3 V entre `VCC` e `GND` do módulo;
 4. só então conecte `SCLK`/`DIN`/`CS`/`DC`/`RST`.
 
+## Ensaio na protoboard (antes da montagem final)
+
+Testar a lógica com o módulo solto, o backlight por resistor externo e o CS por
+software — sem soldar nada no display.
+
+> O conector **IDC 2x12 não entra em protoboard**: as duas fileiras ficam a
+> 2,54 mm e caem na canaleta central. Para o ensaio use dupont (fêmea no header
+> da placa, macho na protoboard); o cabo flat fica para a montagem final.
+
+Ligação (mesmo código de cores):
+
+| Header | Fio | Módulo | Observação |
+| --- | --- | --- | --- |
+| 1 (`3V3`) | vermelho | 6 `VCC` | trilho vermelho da protoboard |
+| 6 (`GND`) | preto | 8 `GND` | trilho azul |
+| 23 (`PC2`) | laranja | 5 `CLK` | |
+| 19 (`PC0`) | amarelo | 4 `DIN` | |
+| 16 (`PG8`) | verde | 3 `DC` | |
+| 18 (`PG9`) | azul | 1 `RST` | |
+| 24 (`PC3`) | branco | 2 `CE` | CS por software (`--cs 67`) |
+| 1 (`3V3`) | marrom | 7 `LIGHT` | com **100 Ω** em série |
+
+Passo a passo:
+
+1. módulo atravessando a canaleta central, um pino por linha (não deixe dois
+   pinos na mesma linha de 5 furos);
+2. alimente os trilhos a partir do pino 1 (3,3 V) e do pino 6 (`GND`); se a
+   protoboard tiver os trilhos partidos no meio, una as metades com um jumper;
+3. **100 nF** entre `VCC` e `GND` junto do módulo (seguro barato contra ruído do
+   barramento em protoboard);
+4. marrom: `LIGHT` → **100 Ω** → trilho de 3,3 V (não ligue o `LIGHT` direto);
+5. com tudo desligado, confira continuidade pino a pino e ausência de curto
+   `VCC`↔`GND`;
+6. ligue só a placa, meça 3,3 V no `VCC` do módulo e veja se o backlight acende
+   fraco (meça a corrente em série com o resistor: 10–25 mA);
+7. só então rode o teste de fumaça.
+
+```bash
+scp scripts/pcd8544-smoke-test.py root@<IP>:/root/
+ssh root@<IP> 'python3 /root/pcd8544-smoke-test.py --cs 67'
+```
+
+Não faça hot-plug: conecte e desconecte o módulo sempre com a placa desligada.
+
 ## Teste de fumaça
 
 O script [`scripts/pcd8544-smoke-test.py`](../scripts/pcd8544-smoke-test.py)
