@@ -308,70 +308,17 @@ práticas:
 - backup e `fsck` têm que tratar as duas partições juntas;
 - um `rsync` "só da raiz" não reproduz o sistema; ele está espalhado nas duas.
 
-## Display LCD Nokia 5110: em andamento
+## O display fica para o próximo texto
 
-Com o sistema estável, o próximo passo é um painel de bancada: um LCD Nokia 5110
-(PCD8544, 84×48) mostrando o que você veria ao logar — **IP, CPU, memória e
-uptime**.
+O que esta placa faz hoje é uma coisa só: responder SSH. Nada de painel, nada de
+tela — e isso é o desenho, não uma pendência.
 
-Duas descobertas já feitas no sistema em produção valem para quem for repetir:
-
-**1. O kernel não aciona o chip select.** O SPI0 já vem habilitado no device tree
-(`/dev/spidev0.0`, `compatible = nanopi,spidev`), mas o pino `PC3` — o CS do
-header — aparece assim:
-
-```text
-pin 67 (PC3): 1c68000.spi (GPIO UNCLAIMED) function gpio_out group PC3
-```
-
-Ele está em função `gpio_out`, **não** em `spi0`, e nenhum driver o reivindicou.
-O `sun6i-spi` do kernel 4.14 ignora a propriedade `cs-gpios`, e o pino fica em
-nível alto: o display ignora tudo e parece queimado. Solução: acionar o CS por
-software (sysfs/GPIO) ou aterrar o pino.
-
-**2. Os pinos "óbvios" estão ocupados.** `PA0` e `PA1` (pinos 11 e 22 do header)
-estão tomados pelo driver do UART2, mesmo sem getty neles. O `PA6` (pino 12) faz
-parte do pinctrl do SPI0. Os GPIOs realmente livres são `PG8`, `PG9` e `PG11`.
-
-A fiação que ficou definida:
-
-| Módulo | Header | GPIO |
-| --- | --- | --- |
-| `VCC` | pino 1 (3,3 V) | — |
-| `GND` | pino 6 | — |
-| `CLK` | pino 23 | `PC2` = 66 |
-| `DIN` | pino 19 | `PC0` = 64 |
-| `CE` | pino 24 | `PC3` = 67 (por software) |
-| `DC` | pino 16 | `PG8` = 200 |
-| `RST` | pino 18 | `PG9` = 201 |
-| `LIGHT` | jumper do módulo | — |
-
-<!-- FOTO (galeria, 2 imagens lado a lado quando publicar): o módulo PCD8544
-     e o jumper do backlight; e o header da placa com os fios soldados.
-     arquivos:
-       public/images/nanopi-neo-air-host-headless/display-modulo.jpg
-       public/images/nanopi-neo-air-host-headless/display-fiacao.jpg
-     legenda: "O módulo Nokia 5110 e a fiação no header de 24 pinos."
-     markdown (uma por linha):
-       ![Módulo LCD Nokia 5110 com o jumper do backlight](/images/nanopi-neo-air-host-headless/display-modulo.jpg)
-       ![Fiação do display no header da NanoPi](/images/nanopi-neo-air-host-headless/display-fiacao.jpg)
--->
-
-O barramento já foi validado com um teste de fumaça que não instala nada —
-`ioctl` direto no `spidev` pela biblioteca padrão do Python — e transmitiu 2536
-bytes com zero erros. Falta plugar o display e ver os padrões na tela. Quando
-isso acontecer, conto aqui o resultado (e a tela de status).
-
-<!-- VÍDEO: a tela de status funcionando — IP, CPU, memória e uptime no LCD,
-     com o terminal ao lado mostrando os mesmos valores. Gravar só depois de
-     validar o display; até lá este bloco fica comentado.
-     arquivo: public/videos/nanopi-neo-air-host-headless/display-status.mp4
-     duração: 10–20 s (plano fixo, sem áudio)
-     legenda: "O painel de bancada: o que você veria ao logar, sem logar."
-     html:
-       <video controls preload="metadata" playsinline
-              src="/videos/nanopi-neo-air-host-headless/display-status.mp4"></video>
--->
+O painel de status (IP, CPU, memória e uptime) é acessório, e virou projeto
+próprio. No caminho apareceram duas armadilhas que não cabem aqui: o kernel do
+vendor **não aciona o chip select** do SPI0 (o `PC3` fica em `gpio_out` e o
+display parece queimado), e um barramento I2C que travava a varredura por falta
+de pull-up. Fica para o segundo artigo — quando o hardware colaborar, com o
+daemon rodando e números reais na tela.
 
 ## O que eu faria diferente
 
