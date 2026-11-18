@@ -18,9 +18,10 @@ Ordem sugerida de leitura = ordem numérica.
 | 10 | [Troubleshooting](10-troubleshooting.md) | Falhas de boot, rede, eMMC, energia | ✅ |
 | 11 | [Decisões e pendências](11-decisoes.md) | ADRs curtos e o que falta definir | 📝 vivo |
 | 12 | [Log de bordo](12-log-de-bordo.md) | O que foi realmente observado na bancada, com evidências | 📝 vivo |
-| 13 | [Backlog de funcionalidades](13-backlog.md) | Ideias futuras com contexto técnico (ex.: display LCD Nokia 5110) | 💡 vivo |
-| 14 | [Display LCD Nokia 5110](14-display-lcd.md) | Ligação elétrica, mapa do header e teste de fumaça | 🔌 hardware |
-| 15 | [Instalador de ponta a ponta](15-instalador.md) | `install.sh`: fases, config, segurança e diagnóstico | 🧪 em teste |
+| 13 | [Backlog de funcionalidades](13-backlog.md) | Ideias futuras com contexto técnico (ex.: display de status) | 💡 vivo |
+| 14 | [Display LCD Nokia 5110](14-display-lcd.md) | Ligação elétrica, mapa do header e teste de fumaça | ⚠️ sem imagem |
+| 15 | [Instalador de ponta a ponta](15-instalador.md) | `install.sh`: fases, config, segurança e diagnóstico | ✅ validado |
+| 16 | [Display OLED I2C](16-display-oled.md) | Ligação, endereços, diagnóstico do barramento e ferramentas | 🔧 investigação |
 | 99 | [Referências](99-referencias.md) | Links oficiais e comunidade | ✅ |
 
 ## Checklists de progresso

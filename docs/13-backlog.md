@@ -10,15 +10,23 @@ Convenção: `B-nnn` = ideia/funcionalidade. Decisões são `D-nnn`
 
 | # | Funcionalidade | Status | Complexidade |
 | --- | --- | --- | --- |
-| B-001 | [Display LCD Nokia 5110 (84x48) com informações de operação](#b-001--display-lcd-nokia-5110-84x48) | 💡 ideia | baixa/média |
+| B-001 | [Display de status (LCD Nokia 5110 ou OLED I2C)](#b-001--display-lcd-nokia-5110-84x48) | 🔧 em investigação | baixa/média |
 
 ---
 
 ## B-001 — Display LCD Nokia 5110 (84x48)
 
 **Registrado em:** 2026-11-14
-**Status:** 💡 ideia (sem data)
+**Status:** 🔧 em investigação (hardware alternativo em teste)
 **Origem:** pedido do usuário durante a sessão 11 do log de bordo.
+
+**Estado em 2026-11-18.** O LCD montado na protoboard nunca acendeu, mesmo com
+`CE`, `RST` e `DC` confirmados no osciloscópio e o modo de teste do controlador
+(`--all-on`) sem resposta ([sessão 16](12-log-de-bordo.md)). O caminho passou a
+ser um **OLED I2C (SSD1306 128x64, `0x3C`)**, que já responde no barramento mas
+ainda não acende o painel — diagnóstico em
+[16-display-oled.md](16-display-oled.md). A decisão de separar o display do
+primeiro artigo está em [D-009](11-decisoes.md).
 
 ### Objetivo
 
@@ -44,6 +52,21 @@ monocromático, SPI write-only, alimentação e lógica em **3,3 V**.
 
 Pinagem detalhada, cuidados elétricos e teste de fumaça:
 [14-display-lcd.md](14-display-lcd.md).
+
+### Hardware alternativo: OLED I2C
+
+O caminho em teste desde a sessão 16 é um **OLED SSD1306 128x64** de 0,96" no
+`I2C0` — quatro fios, dois deles de sinal, sem chip select por software:
+
+| OLED | Placa (GPIO1) | Sinal |
+| --- | --- | --- |
+| `GND` | pino 6 | GND |
+| `VCC` | pino 1 ou 17 | `SYS_3.3V` |
+| `SDA` | pino 3 | `I2C0_SDA` / `PA12` |
+| `SCL` | pino 5 | `I2C0_SCL` / `PA11` |
+
+Endereço `0x3C` (serigrafia `0x78`/`0x7A` são os valores de 8 bits). Diagnóstico,
+ferramentas e cuidados: [16-display-oled.md](16-display-oled.md).
 
 Cuidados:
 
@@ -113,14 +136,19 @@ A pinagem, os cuidados elétricos e o teste de fumaça estão em
 
 ### Pendências para quando for implementar
 
-- [ ] confirmar a **versão do módulo** (alguns breakouts têm regulador/level
-      shifter de 5 V; nesse caso o `VCC` vai em 5 V, mas os sinais continuam 3,3 V)
+- [x] ~~confirmar a versão do módulo LCD~~ — **3,3 V puro**, sem level shifter
+      (o módulo OLED ainda não teve o LDO conferido)
 - [x] sem botão e sem telas rotativas (escopo: uma tela fixa)
-- [ ] medir o consumo do backlight e o impacto em temperatura
+- [ ] medir o consumo do backlight (LCD) e o impacto em temperatura
 - [ ] definir se o display é "enfeite" ou parte do diagnóstico (muda o
       investimento: fbtft + console local é bem mais trabalho)
 - [ ] escolher a fonte dos dados (arquivo de status vs. ler `/sys` direto)
 - [ ] decidir se o sinal Wi-Fi entra na tela (sugerido: sim)
-- [x] validar que o `spidev0.0` funciona no kernel 4.14 da FriendlyElec —
+- [x] ~~validar que o `spidev0.0` funciona no kernel 4.14 da FriendlyElec~~ —
       **já existe no DTB** (`/dev/spidev0.0`, 10 MHz, 0 erros num teste de
       2536 bytes); ver [14-display-lcd.md](14-display-lcd.md)
+- [x] ~~validar o `I2C0` do header~~ — `/dev/i2c-0` em `PA11`/`PA12`, módulo
+      responde em `0x3C`; ver [16-display-oled.md](16-display-oled.md)
+- [ ] fazer o painel acender (5 V com conferência de nível, ou variante correta)
+- [ ] validar o módulo em outra placa antes de descartá-lo
+- [ ] escrever o daemon e o serviço systemd

@@ -200,6 +200,39 @@ descrito no [log de bordo](12-log-de-bordo.md) e no artigo.
 - o artigo precisa deixar claro que bookworm foi o ponto de partida, não o
   destino.
 
+## D-009 · O display sai do primeiro artigo e vira projeto próprio
+
+**Data:** 2026-11-17 · **Status:** aceita
+
+**Contexto.** O host headless está validado e documentado
+([sessão 15](12-log-de-bordo.md)), e é isso que o projeto entregava. O painel de
+status ([B-001](13-backlog.md#b-001--display-lcd-nokia-5110-84x48)) é acessório:
+nenhuma função do sistema depende dele. A [sessão 16](12-log-de-bordo.md)
+mostrou que o assunto tem vida própria — LCD sem imagem mesmo com `CE`, `RST` e
+`DC` confirmados no osciloscópio, e um I2C que só respondeu depois de descobrir
+pull-up ausente e `SDA`/`SCL` trocados.
+
+**Decisão.**
+
+1. O primeiro artigo publica **só a fase host** (eMMC + Wi-Fi + SSH +
+   instalador), sem seção de display "em andamento".
+2. O display passa a ser um **segundo artigo**, com o hardware validado e o
+   daemon rodando — não um relato de investigação aberta.
+3. O caminho principal do display passa a ser o **OLED I2C** (SSD1306 128x64 em
+   `0x3C`): dois fios, sem chip select por software. O PCD8544 continua
+   documentado em [14](14-display-lcd.md) e pode voltar se o módulo se provar
+   bom.
+
+**Consequências.**
+
+- `scripts/ssd1306-smoke-test.py` e `scripts/i2c-bb-probe.py` entram no
+  repositório como ferramentas de diagnóstico, no mesmo padrão sem dependências
+  do teste SPI;
+- o diagnóstico do I2C fica em [16-display-oled.md](16-display-oled.md);
+- B-001 muda de "ideia" para "em investigação", com o hardware redefinido;
+- nada em produção depende do display: se o painel não fechar, o host continua
+  entregue.
+
 ## Pendências
 
 O que ainda precisa de decisão. Atualizar conforme for resolvendo.

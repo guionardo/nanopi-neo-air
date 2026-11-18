@@ -87,4 +87,6 @@ scripts/wifi-inject.sh           firmware + credenciais + chave SSH no rootfs do
 scripts/provision-emmc-wifi.sh   configura o Wi-Fi da eMMC pela rede, a partir do cartão
 scripts/board-probe.sh           sonda de diagnóstico que roda no boot da placa
 scripts/pcd8544-smoke-test.py    teste de fumaça do display LCD Nokia 5110 (84x48)
+scripts/ssd1306-smoke-test.py    teste de fumaça do display OLED I2C (SSD1306)
+scripts/i2c-bb-probe.py          sonda I2C bit-banged nos GPIOs (contorna o controlador)
 ```

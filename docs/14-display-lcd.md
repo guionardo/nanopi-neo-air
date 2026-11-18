@@ -6,6 +6,13 @@ Ligação elétrica e teste do display que vai mostrar CPU, memória, uptime e I
 Este documento é a parte **física**; o conteúdo da tela e o daemon ficam no
 backlog até o hardware estar validado.
 
+> **Situação em 2026-11-18:** o módulo montado nesta fiação **nunca acendeu**,
+> mesmo com `CE`, `RST` e `DC` confirmados no osciloscópio e o modo de teste do
+> controlador (`--all-on`) sem resposta ([sessão 16](12-log-de-bordo.md#sessão-16--2026-11-17--display-o-lcd-mudo-e-o-i2c-travado)).
+> O caminho em teste passou a ser o **OLED I2C** ([16-display-oled.md](16-display-oled.md)).
+> A fiação abaixo continua válida para quando o módulo for validado em outra
+> placa.
+
 ## O que já está pronto no sistema
 
 Verificado na placa em 2026-11-14:
@@ -407,5 +414,8 @@ formato MSB-first que o PCD8544 espera.
 - [ ] fechar o jumper do backlight e confirmar se o `LIGHT` pode ficar sem fio
 - [x] ~~decidir CS~~ — por **software** no pino 24 (`--cs 67`)
 - [x] ~~padronizar as cores dos fios~~ — ver "Código de cores dos fios"
-- [ ] rodar o teste de fumaça e registrar o resultado no log de bordo
+- [x] ~~rodar o teste de fumaça~~ — rodado em 2026-11-17: 5 padrões e `--all-on`
+      transmitidos com `errors=0`, mas **nenhum pixel** apareceu
+      ([sessão 16](12-log-de-bordo.md#sessão-16--2026-11-17--display-o-lcd-mudo-e-o-i2c-travado))
+- [ ] validar o módulo em outra placa antes de descartá-lo
 - [ ] medir o RSSI do Wi-Fi depois de montar o display

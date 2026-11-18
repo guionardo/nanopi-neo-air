@@ -1236,3 +1236,115 @@ O root em overlay também mudou de forma: o `findmnt -no SOURCE /` devolve
 remapeados pelo namespace), não os dispositivos. A checagem confiável é
 estrutural: **sem cartão** a eMMC é `mmcblk0`, então a fase confere a ausência
 de `/dev/mmcblk1` e a presença de `/dev/mmcblk0p2`.
+
+## Sessão 16 — 2026-11-17 · display: o LCD mudo e o I2C travado
+
+Com o host validado, o foco passou a ser o painel de status. O LCD Nokia 5110
+(PCD8544) foi montado na protoboard com a fiação de
+[14-display-lcd.md](14-display-lcd.md) e o teste de fumaça transmitiu sem erro
+de barramento:
+
+```text
+SPI /dev/spidev0.0 @ 4000000 Hz · DC=200 RST=201 CS=67 · contraste=0xBF
+  -> tudo preto -> tudo branco -> xadrez -> metades -> moldura + diagonal
+bytes_tx=170242724  errors=0
+```
+
+A tela nunca mostrou um pixel. Pino por pino, no osciloscópio:
+
+| Sinal | Medição | Veredito |
+| --- | --- | --- |
+| `CE` (pino 24, `PC3`) | alternando 10 s baixo / 10 s alto | ok |
+| `RST` (pino 18, `PG9`) | alternando 10 s | ok |
+| `DC` (pino 3 do módulo, `PG8`) | ~120 Hz, duty 82% | ok (comando curto, quadro de 504 bytes) |
+| `CLK` (pino 5 do módulo) | **60 Hz** | **errado: pino flutuando** |
+
+O `CLK` de 60 Hz apareceu antes e depois de trocar laranja↔amarelo. Varredura de
+contraste (`0x90`→`0xF0`), SPI a 1 MHz e o modo de teste do controlador
+(`--all-on 20`, que deveria deixar a tela inteira preta) não mudaram nada. Sem
+comando interpretado, o controlador fica desligado — e isso descarta contraste e
+framebuffer.
+
+Como dois módulos (LCD e, depois, OLED) falharem é improvável, o foco mudou para
+o caminho. O LCD ficou parado; o OLED I2C entrou como caminho mais simples.
+
+O primeiro sinal estranho foi o `i2cdetect` **travar** em vez de não achar nada:
+
+```text
+[  753.690066] i2c i2c-0: mv64xxx: I2C bus locked, block: 1, time_left: 0
+```
+
+O `pinconf` explicou: `input bias disabled` em `PA11` e `PA12` — o I2C0 do
+header não tem pull-up interno. Sem display plugado, o barramento flutua e o
+controlador o considera ocupado.
+
+Na sequência, uma medida que enganou: `devmem` no `PADAT` devolveu `SCL=0 SDA=0`
+mesmo com o módulo ligado. O valor era o registrador de **saída**. Tirando o
+controlador do caminho (`unbind` + GPIO como entrada), a leitura real foi `1 1`
+— módulo alimentado e fios nos pinos certos.
+
+Faltava saber se o problema era o controlador. Escrevi um I2C bit-banged em
+sysfs (`scripts/i2c-bb-probe.py`) e varri `0x08`–`0x77`: **nenhum ACK**. O
+controlador estava inocente.
+
+Para identificar os pads sem confiar na contagem do header, `PA11` e `PA12` foram
+para saída com duty de 25% e 75% (médias de ~0,8 V e ~2,5 V no multímetro). Com
+isso, a fiação pôde ser conferida em qualquer ponto. A conclusão veio na troca
+de `SDA`/`SCL`:
+
+```text
+$ i2cdetect -y -r 0 0x3c 0x3d
+30:                                    3c --
+```
+
+Era a ordem dos fios — dois fios invertidos que fizeram dois módulos parecerem
+defeituosos. O teste de fumaça do OLED rodou os 5 padrões e o `--all-on` sem
+erro. **O painel continuou apagado.** As cinco variantes de `--variants`
+(SSD1306/SH1106 × 128x32/128x64, contraste `0xCF`/`0xFF`) também não acenderam:
+o módulo responde, mas o painel não é excitado. Ficou pendente testar
+alimentação em 5 V (com conferência dos níveis de `SDA`/`SCL` antes) e validar o
+módulo em outra placa.
+
+Detalhe de método que atrapalhou: durante a sessão a placa reiniciou algumas
+vezes (troca de fios). A cada reboot os GPIOs exportados desaparecem e o `PC3`
+volta ao padrão do DTB — **nível alto**. Uma medida de `CE=0` foi feita
+justamente no meio de um boot e quase virou diagnóstico de fiação.
+
+### Achado 36 — o I2C0 do header não tem pull-up interno
+
+`pinconf` mostra `input bias disabled` em `PA11`/`PA12`. O barramento só funciona
+porque o módulo traz os resistores. Consequência prática: **sem display, o
+`i2cdetect` trava** (`I2C bus locked`) em vez de listar vazio — e isso não é
+defeito da placa.
+
+### Achado 37 — `devmem`/`PADAT` não mede pino multiplexado
+
+Em pino com função alternada, o registrador de dados do SoC espelha a **saída**,
+não o nível do pad. A medição confiável é desligar o controlador
+(`unbind` em `mv64xxx_i2c`) e ler o pino como GPIO de entrada.
+
+### Achado 38 — bit-bang separa controlador de escravo
+
+Quando nenhum endereço responde, o I2C feito à mão nos mesmos dois fios elimina
+o controlador da equação. Com open-drain emulado por `direction` (`out` para
+baixo, `in` para liberar), um clock de 5 kHz é suficiente e o escravo responde
+igual. Foi assim que se provou que o `mv64xxx` não era o culpado.
+
+### Achado 39 — a serigrafia do módulo usa endereço de 8 bits
+
+Os rótulos `0x78`/`0x7A` são os endereços de escrita em 8 bits; no Linux
+(7 bits) são `0x3C`/`0x3D`. Procurar `0x78` no `i2cdetect` não encontra nada.
+
+### Achado 40 — 60 Hz num pino de clock não é clock
+
+Um sinal de ~60 Hz num fio de `CLK` (ou `SDA`) é a assinatura de pino flutuando
+captando ruído da rede elétrica. SPI a 4 MHz aparece como rajadas, não como
+senoide lenta. Vale para qualquer diagnóstico de barramento.
+
+### Achado 41 — ACK no I2C não garante painel aceso
+
+O módulo respondeu em `0x3C` (o chip está vivo e aceita o endereço) e ainda
+assim não acendeu em nenhuma variante de inicialização. `ACK` prova o caminho
+digital até o controlador, não a alimentação do painel (charge pump) nem a
+variante do controlador.
+
