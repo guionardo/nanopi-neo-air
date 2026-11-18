@@ -2,6 +2,7 @@ images/
 *.img
 *.img.gz
 .venv/
+__pycache__/
 
 # instalação local (contém a senha do Wi-Fi)
 install.conf

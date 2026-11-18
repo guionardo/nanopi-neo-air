@@ -139,6 +139,14 @@ class PCD8544:
             0x0C,                 # display control: normal
         )
 
+    def all_on(self):
+        """Modo de teste do PCD8544: todos os pixels ligados (D=1, E=1)."""
+        self._command(0x09)
+
+    def normal(self):
+        """Display control normal: D=1, E=0."""
+        self._command(0x0C)
+
     def show(self, framebuffer):
         assert len(framebuffer) == WIDTH * HEIGHT // 8
         self._command(0x80, 0x40)  # X = 0, Y = 0
@@ -202,6 +210,12 @@ def main():
     p.add_argument("--contrast", type=lambda s: int(s, 0), default=0xBF, help="Vop 0x80–0xFF")
     p.add_argument("--speed", type=int, default=4000000, help="Hz (PCD8544 aceita até 4 MHz)")
     p.add_argument("--hold", action="store_true", help="para no último padrão")
+    p.add_argument("--all-on", type=float, default=0, metavar="SEG",
+                   help="teste do controlador: liga todos os pixels por N segundos")
+    p.add_argument("--soak", type=float, default=0,
+                   help="redesenha um padrão por N segundos (para osciloscópio)")
+    p.add_argument("--pattern", default="moldura",
+                   help="padrão do --soak (prefixo do nome; padrão: moldura)")
     p.add_argument("--delay", type=float, default=1.5, help="segundos por padrão")
     args = p.parse_args()
 
@@ -221,6 +235,23 @@ def main():
             print("  -> %s" % name, flush=True)
             lcd.show(fb)
             time.sleep(args.delay)
+        if args.all_on > 0:
+            print("teste do controlador: todos os pixels ligados por %.0f s"
+                  % args.all_on, flush=True)
+            lcd.all_on()
+            time.sleep(args.all_on)
+            lcd.normal()
+            print("  -> modo normal de volta", flush=True)
+
+        if args.soak > 0:
+            chosen = [(n, fb) for n, fb in PATTERNS if n.startswith(args.pattern)]
+            name, fb = (chosen or PATTERNS[-1:])[0]
+            print("soak: redesenhando \"%s\" por %.0f s (Ctrl+C para sair)"
+                  % (name, args.soak), flush=True)
+            end = time.time() + args.soak
+            while time.time() < end:
+                lcd.show(fb)
+                time.sleep(0.005)
         if args.hold:
             lcd.show(PATTERNS[-1][1])
             print("último padrão na tela; Ctrl+C para sair")
